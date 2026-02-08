@@ -20,9 +20,9 @@ interface Level {
 
 const LEVELS: Level[] = [
   { level: 1, name: "Yangi a'zo", minReferrals: 0, bonus: 5, emoji: "🌱" },
-  { level: 2, name: "Ishtirokchi", minReferrals: 10, bonus: 7, emoji: "⭐" },
-  { level: 3, name: "Mutaxassis", minReferrals: 20, bonus: 15, emoji: "🔥" },
-  { level: 4, name: "Ekspert", minReferrals: 50, bonus: 20, emoji: "💎" },
+  { level: 2, name: "Ishtirokchi", minReferrals: 15, bonus: 7, emoji: "⭐" },
+  { level: 3, name: "Mutaxassis", minReferrals: 30, bonus: 15, emoji: "🔥" },
+  { level: 4, name: "Ekspert", minReferrals: 60, bonus: 20, emoji: "💎" },
   { level: 5, name: "Elita", minReferrals: 100, bonus: 25, emoji: "👑" },
 ];
 
