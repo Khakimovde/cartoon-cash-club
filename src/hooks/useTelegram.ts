@@ -59,7 +59,10 @@ export function useTelegram() {
       tg.ready();
     }
 
-    const startParam = tg?.initDataUnsafe?.start_param;
+    // Get ref code from Telegram start_param or URL query parameter (fallback for inline button)
+    const startParam = tg?.initDataUnsafe?.start_param 
+      || new URLSearchParams(window.location.search).get('ref')
+      || undefined;
     authenticate(userData, startParam);
   }, []);
 
