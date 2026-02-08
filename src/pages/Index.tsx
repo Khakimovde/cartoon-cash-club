@@ -72,7 +72,7 @@ const Index = () => {
           />
         );
       case "admin":
-        return <AdminPanel invokeAdmin={invokeAdmin} />;
+        return <AdminPanel invokeAdmin={invokeAdmin} refreshUser={refreshUser} />;
     }
   };
 

@@ -9,11 +9,12 @@ import { toast } from "sonner";
 
 interface AdminPanelProps {
   invokeAdmin: (action: string, params?: Record<string, any>) => Promise<any>;
+  refreshUser: () => Promise<void>;
 }
 
 type Section = "stats" | "withdrawals" | "channels" | "settings" | "users";
 
-const AdminPanel = ({ invokeAdmin }: AdminPanelProps) => {
+const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
   const [section, setSection] = useState<Section>("stats");
 
   const sections: { id: Section; label: string; icon: typeof BarChart3 }[] = [
@@ -61,7 +62,7 @@ const AdminPanel = ({ invokeAdmin }: AdminPanelProps) => {
       </div>
 
       {section === "stats" && <StatsSection invokeAdmin={invokeAdmin} />}
-      {section === "users" && <UserManagementSection invokeAdmin={invokeAdmin} />}
+      {section === "users" && <UserManagementSection invokeAdmin={invokeAdmin} refreshUser={refreshUser} />}
       {section === "withdrawals" && <WithdrawalsSection invokeAdmin={invokeAdmin} />}
       {section === "channels" && <ChannelsSection invokeAdmin={invokeAdmin} />}
       {section === "settings" && <SettingsSection invokeAdmin={invokeAdmin} />}
@@ -122,7 +123,7 @@ const StatsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdm
 };
 
 // ─── User Management ──────────────────────────────
-const UserManagementSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdmin"] }) => {
+const UserManagementSection = ({ invokeAdmin, refreshUser }: { invokeAdmin: AdminPanelProps["invokeAdmin"]; refreshUser: () => Promise<void> }) => {
   const [searchId, setSearchId] = useState("");
   const [foundUser, setFoundUser] = useState<any>(null);
   const [searching, setSearching] = useState(false);
@@ -171,6 +172,8 @@ const UserManagementSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["
       );
       setFoundUser(result.user);
       setCoinsAmount("");
+      // Refresh main user data so header balance updates too
+      await refreshUser();
     } else {
       toast.error(result?.error || "Xatolik");
     }
