@@ -27,7 +27,21 @@ interface ChannelTask {
   active: boolean;
 }
 
-const COOLDOWN_KEY = "ad_cooldown_end";
+// Per-user cooldown key
+const getCooldownKey = (tgId: number) => `ad_cooldown_end_${tgId}`;
+
+// Calculate next :00 or :30 boundary from now
+const getNextHalfHourBoundary = (): number => {
+  const now = new Date();
+  const minutes = now.getMinutes();
+  const next = new Date(now);
+  if (minutes < 30) {
+    next.setMinutes(30, 0, 0);
+  } else {
+    next.setHours(next.getHours() + 1, 0, 0, 0);
+  }
+  return next.getTime();
+};
 
 const TasksTab = ({
   coins,
@@ -48,6 +62,7 @@ const TasksTab = ({
   const [isAdDrawerOpen, setIsAdDrawerOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<ChannelTask | null>(null);
   const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const cooldownKey = getCooldownKey(telegramId);
 
   useEffect(() => {
     setWatchedAds(adsToday);
@@ -57,19 +72,20 @@ const TasksTab = ({
     setLocalSubscribed(subscribedChannels);
   }, [subscribedChannels]);
 
-  // Check and manage cooldown timer
+  // Check and manage cooldown timer (per-user, aligned to :00/:30)
   useEffect(() => {
     const checkCooldown = () => {
-      const cooldownEnd = localStorage.getItem(COOLDOWN_KEY);
+      const cooldownEnd = localStorage.getItem(cooldownKey);
       if (cooldownEnd) {
         const endTime = parseInt(cooldownEnd, 10);
         const now = Date.now();
         if (endTime > now) {
           setCooldownRemaining(Math.ceil((endTime - now) / 1000));
         } else {
-          localStorage.removeItem(COOLDOWN_KEY);
+          localStorage.removeItem(cooldownKey);
           setCooldownRemaining(0);
           setWatchedAds(0);
+          refreshUser();
         }
       }
     };
@@ -77,16 +93,17 @@ const TasksTab = ({
     checkCooldown();
 
     cooldownIntervalRef.current = setInterval(() => {
-      const cooldownEnd = localStorage.getItem(COOLDOWN_KEY);
+      const cooldownEnd = localStorage.getItem(cooldownKey);
       if (cooldownEnd) {
         const endTime = parseInt(cooldownEnd, 10);
         const now = Date.now();
         if (endTime > now) {
           setCooldownRemaining(Math.ceil((endTime - now) / 1000));
         } else {
-          localStorage.removeItem(COOLDOWN_KEY);
+          localStorage.removeItem(cooldownKey);
           setCooldownRemaining(0);
           setWatchedAds(0);
+          refreshUser();
         }
       } else {
         setCooldownRemaining(0);
@@ -98,7 +115,7 @@ const TasksTab = ({
         clearInterval(cooldownIntervalRef.current);
       }
     };
-  }, []);
+  }, [cooldownKey, refreshUser]);
 
   // Fetch channels and settings
   useEffect(() => {
@@ -119,13 +136,12 @@ const TasksTab = ({
     fetchData();
   }, []);
 
-  // Start cooldown when max ads reached
+  // Start cooldown aligned to next :00 or :30 boundary
   const startCooldown = useCallback(() => {
-    const cooldownDuration = cooldownMinutes * 60 * 1000;
-    const endTime = Date.now() + cooldownDuration;
-    localStorage.setItem(COOLDOWN_KEY, endTime.toString());
-    setCooldownRemaining(cooldownDuration / 1000);
-  }, [cooldownMinutes]);
+    const endTime = getNextHalfHourBoundary();
+    localStorage.setItem(cooldownKey, endTime.toString());
+    setCooldownRemaining(Math.ceil((endTime - Date.now()) / 1000));
+  }, [cooldownKey]);
 
   const handleWatchAd = useCallback(async () => {
     if (watchedAds >= maxAds || isWatching || cooldownRemaining > 0) return;
