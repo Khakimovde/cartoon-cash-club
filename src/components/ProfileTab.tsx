@@ -306,19 +306,25 @@ const ProfileTab = ({
         </p>
       </motion.div>
 
-      {/* Withdrawal History */}
-      {withdrawals.length > 0 && (
-        <motion.div variants={itemVariants} className="card-3d p-4">
-          <h3 className="font-extrabold text-sm text-foreground mb-3 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-primary" />
-            So'rovlar tarixi
-          </h3>
+      {/* Withdrawal History - always visible */}
+      <motion.div variants={itemVariants} className="card-3d p-4">
+        <h3 className="font-extrabold text-sm text-foreground mb-3 flex items-center gap-2">
+          <Clock className="w-4 h-4 text-primary" />
+          To'lovlar tarixi
+        </h3>
+        {withdrawals.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-3">
+            Hali so'rov yuborilmagan
+          </p>
+        ) : (
           <div className="space-y-2">
             {withdrawals.map((w) => {
               const config = STATUS_CONFIG[w.status] || STATUS_CONFIG.pending;
               const StatusIcon = config.icon;
               return (
-                <div key={w.id} className={`p-2.5 rounded-lg ${config.bgColor}`}>
+                <div key={w.id} className={`p-2.5 rounded-lg border-l-4 ${config.bgColor}`} style={{
+                  borderLeftColor: w.status === 'pending' ? '#eab308' : w.status === 'processing' ? '#3b82f6' : w.status === 'paid' ? '#22c55e' : '#ef4444'
+                }}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
                       <StatusIcon className={`w-3.5 h-3.5 ${config.color} ${w.status === "processing" ? "animate-spin" : ""}`} />
@@ -347,8 +353,8 @@ const ProfileTab = ({
               );
             })}
           </div>
-        </motion.div>
-      )}
+        )}
+      </motion.div>
     </motion.div>
   );
 };
