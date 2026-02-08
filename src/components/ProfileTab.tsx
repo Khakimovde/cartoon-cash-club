@@ -28,8 +28,8 @@ interface WithdrawalRequest {
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
   pending: { label: "So'rov yuborildi", color: "text-yellow-600", bgColor: "bg-yellow-500/15", icon: Clock },
-  processing: { label: "O'tkazish jarayoni ketmoqda", color: "text-blue-500", bgColor: "bg-blue-500/15", icon: Loader2 },
-  paid: { label: "To'landi", color: "text-green-500", bgColor: "bg-green-500/15", icon: CheckCircle },
+  processing: { label: "Tasdiqlandi, to'lovni kuting", color: "text-blue-500", bgColor: "bg-blue-500/15", icon: Loader2 },
+  paid: { label: "To'landi ✅", color: "text-green-500", bgColor: "bg-green-500/15", icon: CheckCircle },
   rejected: { label: "Rad etildi", color: "text-red-500", bgColor: "bg-red-500/15", icon: XCircle },
 };
 
@@ -321,33 +321,42 @@ const ProfileTab = ({
             {withdrawals.map((w) => {
               const config = STATUS_CONFIG[w.status] || STATUS_CONFIG.pending;
               const StatusIcon = config.icon;
+              const dateObj = new Date(w.created_at);
+              const dateStr = dateObj.toLocaleDateString("uz-UZ");
+              const timeStr = dateObj.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
               return (
-                <div key={w.id} className={`p-2.5 rounded-lg border-l-4 ${config.bgColor}`} style={{
+                <div key={w.id} className={`p-3 rounded-xl border-l-4 ${config.bgColor}`} style={{
                   borderLeftColor: w.status === 'pending' ? '#eab308' : w.status === 'processing' ? '#3b82f6' : w.status === 'paid' ? '#22c55e' : '#ef4444'
                 }}>
-                  <div className="flex items-center justify-between mb-1">
+                  {/* Status & Date */}
+                  <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-1.5">
                       <StatusIcon className={`w-3.5 h-3.5 ${config.color} ${w.status === "processing" ? "animate-spin" : ""}`} />
                       <span className={`text-xs font-bold ${config.color}`}>{config.label}</span>
                     </div>
                     <span className="text-[10px] text-muted-foreground">
-                      {new Date(w.created_at).toLocaleDateString("uz-UZ")}
+                      {dateStr} · {timeStr}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-foreground">
+                  {/* Amount */}
+                  <div className="flex items-center gap-2 text-xs text-foreground mb-1">
                     <span className="font-bold">{w.amount_coins.toLocaleString()} tanga</span>
                     <span className="text-muted-foreground">→</span>
-                    <span className="font-bold">{w.amount_som.toLocaleString()} so'm</span>
+                    <span className="font-bold text-primary">{w.amount_som.toLocaleString()} so'm</span>
                   </div>
+                  {/* Card number */}
                   {w.card_number && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      💳 •••• {w.card_number.slice(-4)}
+                    <p className="text-[10px] text-muted-foreground">
+                      💳 {w.card_number.replace(/(\d{4})/g, "$1 ").trim().replace(/(\d{4}) (\d{4}) (\d{4}) (\d{4})/, "$1 •••• •••• $4")}
                     </p>
                   )}
+                  {/* Rejection reason */}
                   {w.status === "rejected" && w.rejection_reason && (
-                    <p className="text-[10px] text-red-500 mt-1 font-medium">
-                      📝 Sabab: {w.rejection_reason}
-                    </p>
+                    <div className="mt-1.5 p-2 rounded-lg bg-red-500/10">
+                      <p className="text-[10px] text-red-500 font-bold">
+                        ❌ Sabab: {w.rejection_reason}
+                      </p>
+                    </div>
                   )}
                 </div>
               );
