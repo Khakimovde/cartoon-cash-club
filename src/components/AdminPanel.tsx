@@ -3,19 +3,22 @@ import { motion } from "framer-motion";
 import {
   BarChart3, Users, Tv, TrendingUp, Clock, Check, X,
   Plus, Trash2, Settings, Hash, Wallet, RefreshCw, Loader2, CheckCircle,
+  Search, UserCog, Coins,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface AdminPanelProps {
   invokeAdmin: (action: string, params?: Record<string, any>) => Promise<any>;
 }
 
-type Section = "stats" | "withdrawals" | "channels" | "settings";
+type Section = "stats" | "withdrawals" | "channels" | "settings" | "users";
 
 const AdminPanel = ({ invokeAdmin }: AdminPanelProps) => {
   const [section, setSection] = useState<Section>("stats");
 
   const sections: { id: Section; label: string; icon: typeof BarChart3 }[] = [
     { id: "stats", label: "Statistika", icon: BarChart3 },
+    { id: "users", label: "Foydalanuvchi", icon: UserCog },
     { id: "withdrawals", label: "So'rovlar", icon: Wallet },
     { id: "channels", label: "Kanallar", icon: Hash },
     { id: "settings", label: "Sozlamalar", icon: Settings },
@@ -58,6 +61,7 @@ const AdminPanel = ({ invokeAdmin }: AdminPanelProps) => {
       </div>
 
       {section === "stats" && <StatsSection invokeAdmin={invokeAdmin} />}
+      {section === "users" && <UserManagementSection invokeAdmin={invokeAdmin} />}
       {section === "withdrawals" && <WithdrawalsSection invokeAdmin={invokeAdmin} />}
       {section === "channels" && <ChannelsSection invokeAdmin={invokeAdmin} />}
       {section === "settings" && <SettingsSection invokeAdmin={invokeAdmin} />}
@@ -113,6 +117,169 @@ const StatsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdm
           );
         })}
       </div>
+    </div>
+  );
+};
+
+// ─── User Management ──────────────────────────────
+const UserManagementSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdmin"] }) => {
+  const [searchId, setSearchId] = useState("");
+  const [foundUser, setFoundUser] = useState<any>(null);
+  const [searching, setSearching] = useState(false);
+  const [coinsAmount, setCoinsAmount] = useState("");
+  const [processing, setProcessing] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+
+  const handleSearch = async () => {
+    const id = parseInt(searchId.trim());
+    if (!id || isNaN(id)) {
+      toast.error("Telegram ID raqam bo'lishi kerak");
+      return;
+    }
+    setSearching(true);
+    setNotFound(false);
+    setFoundUser(null);
+    const result = await invokeAdmin("find_user", { target_telegram_id: id });
+    if (result?.user) {
+      setFoundUser(result.user);
+    } else {
+      setNotFound(true);
+    }
+    setSearching(false);
+  };
+
+  const handleModifyCoins = async (action: "add" | "subtract") => {
+    const amount = parseInt(coinsAmount.trim());
+    if (!amount || amount <= 0) {
+      toast.error("Tanga miqdorini kiriting");
+      return;
+    }
+    if (!foundUser) return;
+
+    setProcessing(true);
+    const result = await invokeAdmin("modify_user_coins", {
+      target_telegram_id: foundUser.telegram_id,
+      amount,
+      operation: action,
+    });
+
+    if (result?.success) {
+      toast.success(
+        action === "add"
+          ? `+${amount} tanga qo'shildi`
+          : `-${amount} tanga ayirildi`
+      );
+      setFoundUser(result.user);
+      setCoinsAmount("");
+    } else {
+      toast.error(result?.error || "Xatolik");
+    }
+    setProcessing(false);
+  };
+
+  return (
+    <div className="space-y-3">
+      <span className="font-bold text-sm">Foydalanuvchi boshqaruvi</span>
+
+      {/* Search */}
+      <div className="card-3d p-3 space-y-2">
+        <div className="flex gap-2">
+          <input
+            value={searchId}
+            onChange={(e) => setSearchId(e.target.value)}
+            placeholder="Telegram ID kiriting"
+            type="number"
+            className="flex-1 px-3 py-2 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none"
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          />
+          <button
+            onClick={handleSearch}
+            disabled={searching || !searchId.trim()}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-bold flex items-center gap-1 disabled:opacity-50"
+          >
+            {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Not found */}
+      {notFound && (
+        <div className="card-3d p-4 text-center">
+          <p className="text-sm text-muted-foreground">Foydalanuvchi topilmadi</p>
+        </div>
+      )}
+
+      {/* Found user */}
+      {foundUser && (
+        <div className="card-3d p-3 space-y-3">
+          {/* User info */}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-xl">
+              {foundUser.photo_url ? (
+                <img src={foundUser.photo_url} alt="" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                "🧑‍💻"
+              )}
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-sm text-foreground">
+                {foundUser.first_name || foundUser.username || "Noma'lum"}
+                {foundUser.last_name ? ` ${foundUser.last_name}` : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">@{foundUser.username || "—"}</p>
+              <p className="text-xs text-muted-foreground">ID: {foundUser.telegram_id}</p>
+            </div>
+          </div>
+
+          {/* Balance info */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="text-center p-2 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Balans</p>
+              <p className="text-sm font-extrabold text-coin">{(foundUser.coins || 0).toLocaleString()}</p>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Referallar</p>
+              <p className="text-sm font-extrabold text-foreground">{foundUser.referral_count || 0}</p>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">Ref. daromad</p>
+              <p className="text-sm font-extrabold text-foreground">{(foundUser.referral_earnings || 0).toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* Modify coins */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Tanga qo'shish / ayirish</p>
+            <div className="flex gap-2">
+              <input
+                value={coinsAmount}
+                onChange={(e) => setCoinsAmount(e.target.value)}
+                placeholder="Miqdor"
+                type="number"
+                className="flex-1 px-3 py-2 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none"
+              />
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => handleModifyCoins("add")}
+                disabled={processing || !coinsAmount.trim()}
+                className="flex-1 py-2 rounded-lg bg-green-500/10 text-green-500 text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+              >
+                {processing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                Qo'shish
+              </button>
+              <button
+                onClick={() => handleModifyCoins("subtract")}
+                disabled={processing || !coinsAmount.trim()}
+                className="flex-1 py-2 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+              >
+                {processing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                Ayirish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -211,14 +378,12 @@ const WithdrawalsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["inv
                 {new Date(w.created_at).toLocaleString("uz-UZ")}
               </div>
 
-              {/* Rejection reason display */}
               {w.status === "rejected" && w.rejection_reason && (
                 <div className="text-[10px] text-red-500 mb-2 p-1.5 rounded bg-red-500/10 font-medium">
                   📝 Sabab: {w.rejection_reason}
                 </div>
               )}
 
-              {/* Pending: Approve or Reject */}
               {w.status === "pending" && (
                 <>
                   {rejectingId === w.id ? (
@@ -268,7 +433,6 @@ const WithdrawalsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["inv
                 </>
               )}
 
-              {/* Processing: Mark as Paid or Reject */}
               {w.status === "processing" && (
                 <>
                   {rejectingId === w.id ? (
