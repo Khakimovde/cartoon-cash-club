@@ -65,8 +65,10 @@ Tayyor bo'lsangiz, quyidagi tugmani bosing! 👇`
 
   // Build web app URL with referral code if present
   let webAppUrl = WEB_APP_URL
-  // The start_param is passed to Telegram WebApp as initDataUnsafe.start_param
-  // So we don't need to add it to the URL - Telegram handles it
+  // Pass ref code as URL parameter so it's available when Mini App opens via inline button
+  if (startParam) {
+    webAppUrl += `?ref=${encodeURIComponent(startParam)}`
+  }
 
   const keyboard = {
     inline_keyboard: [

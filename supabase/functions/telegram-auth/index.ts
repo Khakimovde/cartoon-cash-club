@@ -92,6 +92,14 @@ Deno.serve(async (req) => {
           }
         }
       }
+
+      // Re-fetch user to get updated data (including referred_by)
+      const { data: freshUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('telegram_id', telegram_id)
+        .single()
+      if (freshUser) user = freshUser
     } else {
       // Update existing user's info
       await supabase.from('users')
