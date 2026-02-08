@@ -5,6 +5,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+// Get start of current half-hour window (:00 or :30)
+function getHalfHourBoundary(): string {
+  const now = new Date()
+  const minutes = now.getMinutes()
+  const boundary = new Date(now)
+  if (minutes >= 30) {
+    boundary.setMinutes(30, 0, 0)
+  } else {
+    boundary.setMinutes(0, 0, 0)
+  }
+  return boundary.toISOString()
+}
+
 // Referral bonus percentages based on referral count
 function getReferralBonusPercent(referralCount: number): number {
   if (referralCount >= 100) return 25
@@ -18,7 +31,6 @@ function getReferralBonusPercent(referralCount: number): number {
 async function processReferralBonus(supabase: any, userId: number, coinsEarned: number) {
   if (coinsEarned <= 0) return
 
-  // Get user's referred_by
   const { data: user } = await supabase
     .from('users')
     .select('referred_by')
@@ -27,7 +39,6 @@ async function processReferralBonus(supabase: any, userId: number, coinsEarned: 
 
   if (!user?.referred_by) return
 
-  // Get referrer info
   const { data: referrer } = await supabase
     .from('users')
     .select('telegram_id, referral_count, referral_earnings, coins')
@@ -60,27 +71,27 @@ async function checkChannelMembership(userId: number, channelUsername: string): 
   }
 
   const cleanUsername = channelUsername.replace('@', '')
-  
+
   try {
     console.log(`[Telegram] Checking membership for user ${userId} in channel @${cleanUsername}`)
-    
+
     const response = await fetch(
       `https://api.telegram.org/bot${botToken}/getChatMember?chat_id=@${cleanUsername}&user_id=${userId}`,
       { method: 'GET' }
     )
-    
+
     const data = await response.json()
     console.log('[Telegram] API response:', JSON.stringify(data))
-    
+
     if (!data.ok) {
       console.error('[Telegram] API error:', data.description)
       return false
     }
-    
+
     const status = data.result?.status
     const validStatuses = ['member', 'administrator', 'creator']
     const isMember = validStatuses.includes(status)
-    
+
     console.log(`[Telegram] User status: ${status}, isMember: ${isMember}`)
     return isMember
   } catch (error) {
@@ -131,22 +142,22 @@ Deno.serve(async (req) => {
         const adReward = parseInt(getSetting('ad_reward_coins') || '13')
         const maxAds = parseInt(getSetting('max_ads_per_session') || '10')
 
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const { count: todayAds } = await supabase
+        // Count ads in current half-hour window (not daily)
+        const windowStart = getHalfHourBoundary()
+        const { count: windowAds } = await supabase
           .from('ad_views')
           .select('*', { count: 'exact', head: true })
           .eq('user_telegram_id', telegram_id)
-          .gte('viewed_at', today.toISOString())
+          .gte('viewed_at', windowStart)
 
-        if ((todayAds || 0) >= maxAds) {
-          result = { success: false, error: 'Daily ad limit reached' }
+        if ((windowAds || 0) >= maxAds) {
+          result = { success: false, error: 'Bu oyna uchun reklama limiti tugadi' }
           break
         }
 
-        const newAdsCount = (todayAds || 0) + 1
+        const newAdsCount = (windowAds || 0) + 1
         const isLastAd = newAdsCount >= maxAds
-        
+
         const coinsToAdd = isLastAd ? (adReward * maxAds) : 0
 
         await supabase.from('ad_views').insert({
@@ -204,10 +215,10 @@ Deno.serve(async (req) => {
         }
 
         const isMember = await checkChannelMembership(telegram_id, channel.username)
-        
+
         if (!isMember) {
-          result = { 
-            success: false, 
+          result = {
+            success: false,
             error: 'Kanalga obuna bo\'lmagansiz! Iltimos, avval kanalga obuna bo\'ling.',
             need_subscribe: true
           }
@@ -227,10 +238,10 @@ Deno.serve(async (req) => {
         // Process referral bonus for channel subscription reward
         await processReferralBonus(supabase, telegram_id, channelReward)
 
-        result = { 
-          success: true, 
-          coins_earned: channelReward, 
-          total_coins: user.coins + channelReward 
+        result = {
+          success: true,
+          coins_earned: channelReward,
+          total_coins: user.coins + channelReward
         }
         break
       }

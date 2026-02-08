@@ -82,10 +82,29 @@ const TasksTab = ({
         if (endTime > now) {
           setCooldownRemaining(Math.ceil((endTime - now) / 1000));
         } else {
+          // Cooldown expired - reset everything
           localStorage.removeItem(cooldownKey);
           setCooldownRemaining(0);
           setWatchedAds(0);
           refreshUser();
+        }
+      } else {
+        // No cooldown set - check if we need to auto-set one
+        // If ads are maxed but no cooldown (e.g. cleared localStorage or new device)
+        if (watchedAds >= maxAds && maxAds > 0) {
+          const endTime = getNextHalfHourBoundary();
+          const now = Date.now();
+          if (endTime > now) {
+            // Still within the current window, set cooldown
+            localStorage.setItem(cooldownKey, endTime.toString());
+            setCooldownRemaining(Math.ceil((endTime - now) / 1000));
+          } else {
+            // Already past the boundary, reset
+            setWatchedAds(0);
+            refreshUser();
+          }
+        } else {
+          setCooldownRemaining(0);
         }
       }
     };
@@ -100,6 +119,7 @@ const TasksTab = ({
         if (endTime > now) {
           setCooldownRemaining(Math.ceil((endTime - now) / 1000));
         } else {
+          // Cooldown expired
           localStorage.removeItem(cooldownKey);
           setCooldownRemaining(0);
           setWatchedAds(0);
@@ -115,7 +135,7 @@ const TasksTab = ({
         clearInterval(cooldownIntervalRef.current);
       }
     };
-  }, [cooldownKey, refreshUser]);
+  }, [cooldownKey, refreshUser, watchedAds, maxAds]);
 
   // Fetch channels and settings
   useEffect(() => {
