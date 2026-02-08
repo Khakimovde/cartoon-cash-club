@@ -113,7 +113,7 @@ const LeaderboardTab = () => {
                   {entry.first_name || entry.username || "Foydalanuvchi"}
                 </span>
                 <p className="text-[11px] text-muted-foreground truncate">
-                  {entry.username ? `@${entry.username}` : `ID: ${String(entry.telegram_id).slice(-6)}`}
+                  ID: {entry.telegram_id}
                 </p>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
@@ -175,7 +175,7 @@ const TopCard = ({ entry, rank, isFirst }: TopCardProps) => {
         {entry.first_name || entry.username || "User"}
       </span>
       <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
-        {entry.username ? `@${entry.username}` : `ID: ${String(entry.telegram_id).slice(-6)}`}
+        ID: {entry.telegram_id}
       </span>
       <div className="flex items-center gap-0.5 mt-1">
         <img src={coinImg} alt="" className={isFirst ? "w-4 h-4" : "w-3 h-3"} />
