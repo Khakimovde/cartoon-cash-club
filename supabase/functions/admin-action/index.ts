@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
         const telegramIds = [...new Set(withdrawals?.map((w: any) => w.user_telegram_id) || [])]
         const { data: users } = await supabase
           .from('users')
-          .select('telegram_id, username, first_name')
+          .select('telegram_id, username, first_name, last_name')
           .in('telegram_id', telegramIds.length > 0 ? telegramIds : [0])
 
         const enriched = withdrawals?.map((w: any) => ({

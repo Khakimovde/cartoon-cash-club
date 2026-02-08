@@ -358,28 +358,39 @@ const WithdrawalsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["inv
 
           return (
             <div key={w.id} className="card-3d p-3">
-              <div className="flex items-center justify-between mb-1">
-                <div>
-                  <span className="font-bold text-sm text-foreground">
-                    {w.user?.first_name || w.user?.username || `ID: ${w.user_telegram_id}`}
-                  </span>
-                  <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${config.bgColor} ${config.color}`}>
-                    {config.label}
-                  </span>
+              {/* Status badge */}
+              <div className="flex items-center justify-between mb-2">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${config.bgColor} ${config.color}`}>
+                  {config.label}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {new Date(w.created_at).toLocaleString("uz-UZ")}
+                </span>
+              </div>
+              {/* User info */}
+              <div className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-secondary">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-foreground truncate">
+                    {w.user?.first_name || "Noma'lum"}
+                    {w.user?.last_name ? ` ${w.user.last_name}` : ""}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    @{w.user?.username || "—"} · ID: {w.user_telegram_id}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground mb-1">
-                <span>{w.amount_coins?.toLocaleString()} tanga</span>
-                <span>{w.amount_som?.toLocaleString()} so'm</span>
+              {/* Amount */}
+              <div className="flex items-center gap-3 text-xs mb-1">
+                <span className="font-bold text-foreground">{w.amount_coins?.toLocaleString()} tanga</span>
+                <span className="text-muted-foreground">→</span>
+                <span className="font-bold text-primary">{w.amount_som?.toLocaleString()} so'm</span>
               </div>
+              {/* Card number */}
               {w.card_number && (
-                <div className="text-xs text-foreground mb-1 font-medium">
+                <div className="text-xs text-foreground mb-2 font-medium">
                   💳 {w.card_number.replace(/(\d{4})/g, "$1 ").trim()}
                 </div>
               )}
-              <div className="text-[10px] text-muted-foreground mb-2">
-                {new Date(w.created_at).toLocaleString("uz-UZ")}
-              </div>
 
               {w.status === "rejected" && w.rejection_reason && (
                 <div className="text-[10px] text-red-500 mb-2 p-1.5 rounded bg-red-500/10 font-medium">

@@ -49,7 +49,7 @@ const AdWatchDrawer = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 z-50"
+            className="fixed inset-0 bg-black/60 z-[60]"
           />
 
           {/* Drawer */}
@@ -58,7 +58,7 @@ const AdWatchDrawer = ({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 350 }}
-            className="fixed bottom-0 left-0 right-0 bg-card rounded-t-3xl z-50 shadow-2xl max-w-md mx-auto"
+            className="fixed bottom-0 left-0 right-0 bg-card rounded-t-3xl z-[60] shadow-2xl max-w-md mx-auto"
           >
             {/* Handle bar */}
             <div className="flex justify-center pt-3 pb-2">
