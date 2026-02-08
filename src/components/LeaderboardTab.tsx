@@ -23,7 +23,7 @@ const LeaderboardTab = () => {
         .from("users")
         .select("telegram_id, username, first_name, photo_url, coins")
         .order("coins", { ascending: false })
-        .limit(20);
+        .limit(30);
 
       if (data) setUsers(data as LeaderboardUser[]);
       setLoading(false);
