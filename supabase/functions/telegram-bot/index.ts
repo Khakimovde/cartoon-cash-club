@@ -5,7 +5,7 @@ const corsHeaders = {
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 const ADMIN_ID = 5326022510
-const WEB_APP_URL = 'https://id-preview--da6cc894-d78d-46f2-b37b-c76118b03a2c.lovable.app'
+const WEB_APP_URL = 'https://cartoon-cash-club.lovable.app'
 
 interface TelegramUpdate {
   update_id: number
