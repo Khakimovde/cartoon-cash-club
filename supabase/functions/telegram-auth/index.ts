@@ -220,12 +220,14 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('referrer_telegram_id', telegram_id)
 
-    // Update user's referral_count if different
-    if (referralCount !== null && referralCount !== user.referral_count) {
+    // Only increase referral_count, never decrease (admin may have set a higher value manually)
+    const actualCount = referralCount || 0
+    const currentCount = user.referral_count || 0
+    if (actualCount > currentCount) {
       await supabase.from('users')
-        .update({ referral_count: referralCount })
+        .update({ referral_count: actualCount })
         .eq('telegram_id', telegram_id)
-      user.referral_count = referralCount
+      user.referral_count = actualCount
     }
 
     // Get subscribed channels
@@ -252,7 +254,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       user: {
         ...user,
-        referral_count: referralCount || user.referral_count || 0,
+        referral_count: user.referral_count || 0,
       },
       isAdmin: !!adminCheck,
       subscribedChannels: subscriptions?.map(s => s.channel_task_id) || [],
