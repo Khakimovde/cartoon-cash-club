@@ -42,7 +42,7 @@ const TasksTab = ({
   const [channels, setChannels] = useState<ChannelTask[]>([]);
   const [maxAds, setMaxAds] = useState(10);
   const [adReward, setAdReward] = useState(13);
-  const [cooldownMinutes, setCooldownMinutes] = useState(40);
+  const [cooldownMinutes, setCooldownMinutes] = useState(30);
   const [localSubscribed, setLocalSubscribed] = useState<string[]>(subscribedChannels);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [isAdDrawerOpen, setIsAdDrawerOpen] = useState(false);
@@ -134,18 +134,24 @@ const TasksTab = ({
     try {
       const adShown = await showAd();
       if (adShown) {
-        setIsAdDrawerOpen(false);
         const result = await invokeAction("watch_ad");
         if (result?.success) {
           const newAdsCount = result.ads_today;
           setWatchedAds(newAdsCount);
-          if (newAdsCount >= maxAds) {
+          toast.success(`Reklama ko'rildi! ${result.completed ? `+${result.coins_earned} tanga` : `${newAdsCount}/${maxAds}`}`);
+          if (result.completed) {
             startCooldown();
+            await refreshUser();
           }
+        } else if (result?.error) {
+          toast.error(result.error);
         }
+      } else {
+        toast.error("Reklama yuklanmadi, qayta urinib ko'ring");
       }
     } catch (error) {
       console.error("Ad error:", error);
+      toast.error("Xatolik yuz berdi");
     } finally {
       setIsWatching(false);
     }

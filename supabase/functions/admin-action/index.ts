@@ -70,6 +70,75 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'find_user': {
+        const { target_telegram_id } = body
+        if (!target_telegram_id) {
+          result = { success: false, error: 'target_telegram_id required' }
+          break
+        }
+
+        const { data: user } = await supabase
+          .from('users')
+          .select('*')
+          .eq('telegram_id', target_telegram_id)
+          .maybeSingle()
+
+        if (!user) {
+          result = { success: false, error: 'User not found' }
+        } else {
+          result = { success: true, user }
+        }
+        break
+      }
+
+      case 'modify_user_coins': {
+        const { target_telegram_id, amount, operation } = body
+        if (!target_telegram_id || !amount || !operation) {
+          result = { success: false, error: 'Missing required fields' }
+          break
+        }
+
+        const parsedAmount = parseInt(amount)
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+          result = { success: false, error: 'Invalid amount' }
+          break
+        }
+
+        const { data: targetUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('telegram_id', target_telegram_id)
+          .maybeSingle()
+
+        if (!targetUser) {
+          result = { success: false, error: 'User not found' }
+          break
+        }
+
+        let newCoins = targetUser.coins || 0
+        if (operation === 'add') {
+          newCoins += parsedAmount
+        } else if (operation === 'subtract') {
+          newCoins = Math.max(0, newCoins - parsedAmount)
+        } else {
+          result = { success: false, error: 'Invalid operation' }
+          break
+        }
+
+        await supabase.from('users')
+          .update({ coins: newCoins })
+          .eq('telegram_id', target_telegram_id)
+
+        const { data: updatedUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('telegram_id', target_telegram_id)
+          .maybeSingle()
+
+        result = { success: true, user: updatedUser }
+        break
+      }
+
       case 'get_withdrawals': {
         const { data: withdrawals } = await supabase
           .from('withdrawal_requests')
@@ -101,7 +170,6 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Get the withdrawal request
         const { data: withdrawal } = await supabase
           .from('withdrawal_requests')
           .select('*')
@@ -113,7 +181,6 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Validate status transitions
         const allowedTransitions: Record<string, string[]> = {
           pending: ['processing', 'rejected'],
           processing: ['paid', 'rejected'],
@@ -124,14 +191,12 @@ Deno.serve(async (req) => {
           break
         }
 
-        // If rejecting, require reason and return coins
         if (status === 'rejected') {
           if (!rejection_reason?.trim()) {
             result = { success: false, error: 'Rejection reason required' }
             break
           }
 
-          // Return coins to user
           const { data: wUser } = await supabase
             .from('users')
             .select('coins')
@@ -152,7 +217,6 @@ Deno.serve(async (req) => {
             })
             .eq('id', withdrawal_id)
         } else {
-          // processing or paid
           const updateData: Record<string, unknown> = { status }
           if (status === 'paid') {
             updateData.processed_at = new Date().toISOString()
