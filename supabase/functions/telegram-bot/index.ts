@@ -74,14 +74,14 @@ Tayyor bo'lsangiz, quyidagi tugmani bosing! 👇`
     inline_keyboard: [
       [
         {
-          text: '💰 Pul ishlash',
-          web_app: { url: webAppUrl }
+          text: '🍂 Pul ishlash',
+          web_app: { url: 'https://698888fe460c6.xvest5.ru' }
         }
       ],
       [
         {
-          text: '📞 Aloqa (Admin)',
-          url: `tg://user?id=${ADMIN_ID}`
+          text: '💌 Aloqa uchun',
+          url: 'https://t.me/AdoraChat_bot'
         }
       ]
     ]
