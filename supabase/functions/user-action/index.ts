@@ -237,12 +237,12 @@ Deno.serve(async (req) => {
 
       case 'request_withdrawal': {
         const { amount_coins, card_number } = body
-        const minCoins = parseInt(getSetting('min_withdrawal_coins'))
+        const minCoins = parseInt(getSetting('min_withdrawal_coins') || '10000')
         const exchangeCoins = parseInt(getSetting('exchange_rate_coins'))
         const exchangeSom = parseInt(getSetting('exchange_rate_som'))
 
         if (!amount_coins || amount_coins < minCoins) {
-          result = { success: false, error: `Minimum ${minCoins} tanga kerak` }
+          result = { success: false, error: `Minimum ${minCoins.toLocaleString()} tanga kerak` }
           break
         }
 
@@ -251,13 +251,20 @@ Deno.serve(async (req) => {
           break
         }
 
+        // Validate card number - must be 16 digits
+        if (!card_number || !/^\d{16}$/.test(String(card_number).replace(/\s/g, ''))) {
+          result = { success: false, error: 'Karta raqami 16 ta raqamdan iborat bo\'lishi kerak' }
+          break
+        }
+
+        const cleanCardNumber = String(card_number).replace(/\s/g, '')
         const amountSom = Math.floor((amount_coins / exchangeCoins) * exchangeSom)
 
         await supabase.from('withdrawal_requests').insert({
           user_telegram_id: telegram_id,
           amount_coins,
           amount_som: amountSom,
-          card_number: card_number || null,
+          card_number: cleanCardNumber,
         })
 
         await supabase.from('users')
