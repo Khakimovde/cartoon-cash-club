@@ -73,41 +73,41 @@ const AdWatchDrawer = ({
               <X className="w-4 h-4 text-muted-foreground" />
             </button>
 
-            <div className="px-5 pb-8">
+            <div className="px-4 pb-5 max-h-[70vh] overflow-y-auto">
               {/* Header */}
-              <div className="flex items-center gap-4 mb-5">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                  <img src={videoAdIcon} alt="Reklama" className="w-11 h-11 object-contain" />
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center flex-shrink-0">
+                  <img src={videoAdIcon} alt="Reklama" className="w-8 h-8 object-contain" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-extrabold text-foreground">Reklama ko'rish</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="text-lg font-extrabold text-foreground">Reklama ko'rish</h3>
+                  <p className="text-xs text-muted-foreground">
                     {watchedAds}/{maxAds} ta ko'rildi
                   </p>
                 </div>
               </div>
 
               {/* Reward display */}
-              <div className="bg-gradient-to-r from-coin/10 to-coin/5 rounded-2xl p-4 mb-5">
-                <div className="flex items-center justify-center gap-3">
-                  <img src={coinImg} alt="coin" className="w-10 h-10" />
+              <div className="bg-gradient-to-r from-coin/10 to-coin/5 rounded-xl p-3 mb-3">
+                <div className="flex items-center justify-center gap-2">
+                  <img src={coinImg} alt="coin" className="w-8 h-8" />
                   <div className="text-center">
-                    <p className="text-3xl font-extrabold text-coin">{adReward * maxAds}</p>
-                    <p className="text-xs text-muted-foreground">Jami tanga</p>
+                    <p className="text-2xl font-extrabold text-coin">{adReward * maxAds}</p>
+                    <p className="text-[10px] text-muted-foreground">Jami tanga</p>
                   </div>
                 </div>
-                <p className="text-center text-sm text-muted-foreground mt-2">
-                  Har bir reklama uchun <span className="font-bold text-coin">{adReward}</span> tanga
+                <p className="text-center text-xs text-muted-foreground mt-1">
+                  Har bir reklama = <span className="font-bold text-coin">{adReward}</span> tanga
                 </p>
               </div>
 
               {/* Progress */}
-              <div className="mb-5">
-                <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+              <div className="mb-3">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
                   <span>Jarayon</span>
                   <span className="font-bold">{watchedAds}/{maxAds}</span>
                 </div>
-                <div className="h-3 bg-muted rounded-full overflow-hidden">
+                <div className="h-2.5 bg-muted rounded-full overflow-hidden">
                   <motion.div
                     className="h-full rounded-full"
                     style={{ background: "var(--gradient-primary)" }}
@@ -120,11 +120,11 @@ const AdWatchDrawer = ({
 
               {/* Cooldown timer */}
               {isOnCooldown && (
-                <div className="flex items-center justify-center gap-3 mb-5 py-3 px-4 rounded-xl bg-muted">
-                  <Clock className="w-5 h-5 text-primary animate-pulse" />
+                <div className="flex items-center justify-center gap-2 mb-3 py-2 px-3 rounded-lg bg-muted">
+                  <Clock className="w-4 h-4 text-primary animate-pulse" />
                   <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Keyingi reklama</p>
-                    <p className="text-xl font-extrabold text-primary">{formatTime(cooldownRemaining)}</p>
+                    <p className="text-[10px] text-muted-foreground">Keyingi reklama</p>
+                    <p className="text-lg font-extrabold text-primary">{formatTime(cooldownRemaining)}</p>
                   </div>
                 </div>
               )}
@@ -133,7 +133,7 @@ const AdWatchDrawer = ({
               <button
                 onClick={handleWatchClick}
                 disabled={isMaxReached || isWatching || isOnCooldown}
-                className="w-full py-4 rounded-2xl text-base font-bold transition-all duration-300 flex items-center justify-center gap-2 active:scale-[0.98] disabled:active:scale-100"
+                className="w-full py-3 rounded-xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 active:scale-[0.98] disabled:active:scale-100"
                 style={{
                   background: isMaxReached
                     ? "hsl(var(--success))"
@@ -146,39 +146,32 @@ const AdWatchDrawer = ({
                   boxShadow:
                     isMaxReached || isOnCooldown
                       ? "none"
-                      : "0 6px 20px hsla(215, 90%, 55%, 0.35)",
+                      : "0 4px 14px hsla(215, 90%, 55%, 0.3)",
                   opacity: isWatching ? 0.7 : 1,
                 }}
               >
                 {isWatching ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Yuklanmoqda...
                   </>
                 ) : isMaxReached ? (
                   <>
-                    <CheckCircle2 className="w-5 h-5" />
+                    <CheckCircle2 className="w-4 h-4" />
                     Bajarildi!
                   </>
                 ) : isOnCooldown ? (
                   <>
-                    <Clock className="w-5 h-5" />
+                    <Clock className="w-4 h-4" />
                     Kutish kerak
                   </>
                 ) : (
                   <>
                     Ko'rish
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-4 h-4" />
                   </>
                 )}
               </button>
-
-              {/* Help text */}
-              {!isMaxReached && !isOnCooldown && !isWatching && (
-                <p className="text-center text-xs text-muted-foreground mt-3">
-                  Tugmani bosing va reklamani ko'ring
-                </p>
-              )}
             </div>
           </motion.div>
         </>
