@@ -3,9 +3,10 @@ import { motion } from "framer-motion";
 import {
   BarChart3, Users, Tv, TrendingUp, Clock, Check, X,
   Plus, Trash2, Settings, Hash, Wallet, RefreshCw, Loader2, CheckCircle,
-  Search, UserCog, Coins,
+  Search, UserCog, Coins, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getCurrentLevel, getNextLevel } from "./ReferralTab";
 
 interface AdminPanelProps {
   invokeAdmin: (action: string, params?: Record<string, any>) => Promise<any>;
@@ -123,6 +124,14 @@ const StatsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdm
 };
 
 // ─── User Management ──────────────────────────────
+const LEVELS = [
+  { level: 1, name: "Yangi a'zo", minReferrals: 0, bonus: 5, emoji: "🌱" },
+  { level: 2, name: "Ishtirokchi", minReferrals: 15, bonus: 7, emoji: "⭐" },
+  { level: 3, name: "Mutaxassis", minReferrals: 30, bonus: 15, emoji: "🔥" },
+  { level: 4, name: "Ekspert", minReferrals: 60, bonus: 20, emoji: "💎" },
+  { level: 5, name: "Elita", minReferrals: 100, bonus: 25, emoji: "👑" },
+];
+
 const UserManagementSection = ({ invokeAdmin, refreshUser }: { invokeAdmin: AdminPanelProps["invokeAdmin"]; refreshUser: () => Promise<void> }) => {
   const [searchId, setSearchId] = useState("");
   const [foundUser, setFoundUser] = useState<any>(null);
@@ -130,6 +139,7 @@ const UserManagementSection = ({ invokeAdmin, refreshUser }: { invokeAdmin: Admi
   const [coinsAmount, setCoinsAmount] = useState("");
   const [processing, setProcessing] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [levelProcessing, setLevelProcessing] = useState(false);
 
   const handleSearch = async () => {
     const id = parseInt(searchId.trim());
@@ -172,13 +182,32 @@ const UserManagementSection = ({ invokeAdmin, refreshUser }: { invokeAdmin: Admi
       );
       setFoundUser(result.user);
       setCoinsAmount("");
-      // Refresh main user data so header balance updates too
       await refreshUser();
     } else {
       toast.error(result?.error || "Xatolik");
     }
     setProcessing(false);
   };
+
+  const handleChangeLevel = async (targetLevel: typeof LEVELS[number]) => {
+    if (!foundUser) return;
+    setLevelProcessing(true);
+    const result = await invokeAdmin("set_user_level", {
+      target_telegram_id: foundUser.telegram_id,
+      referral_count: targetLevel.minReferrals,
+    });
+
+    if (result?.success) {
+      toast.success(`Daraja o'zgartirildi: ${targetLevel.emoji} ${targetLevel.name} (${targetLevel.bonus}%)`);
+      setFoundUser(result.user);
+      await refreshUser();
+    } else {
+      toast.error(result?.error || "Xatolik");
+    }
+    setLevelProcessing(false);
+  };
+
+  const userLevel = foundUser ? getCurrentLevel(foundUser.referral_count || 0) : null;
 
   return (
     <div className="space-y-3">
@@ -248,6 +277,45 @@ const UserManagementSection = ({ invokeAdmin, refreshUser }: { invokeAdmin: Admi
               <p className="text-xs text-muted-foreground">Ref. daromad</p>
               <p className="text-sm font-extrabold text-foreground">{(foundUser.referral_earnings || 0).toLocaleString()}</p>
             </div>
+          </div>
+
+          {/* Current level & change */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Daraja boshqaruvi</p>
+            <div className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-secondary">
+              <span className="text-lg">{userLevel?.emoji}</span>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-foreground">{userLevel?.name}</p>
+                <p className="text-[10px] text-muted-foreground">Bonus: {userLevel?.bonus}%</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-5 gap-1.5">
+              {LEVELS.map((level) => {
+                const isCurrent = userLevel?.level === level.level;
+                return (
+                  <button
+                    key={level.level}
+                    onClick={() => !isCurrent && handleChangeLevel(level)}
+                    disabled={isCurrent || levelProcessing}
+                    className={`p-2 rounded-lg text-center transition-colors disabled:opacity-60 ${
+                      isCurrent
+                        ? "ring-2 ring-primary bg-primary/10"
+                        : "bg-secondary hover:bg-muted"
+                    }`}
+                  >
+                    <span className="text-lg block">{level.emoji}</span>
+                    <span className="text-[10px] font-bold text-foreground block">{level.bonus}%</span>
+                    <span className="text-[9px] text-muted-foreground block">{level.minReferrals}+</span>
+                  </button>
+                );
+              })}
+            </div>
+            {levelProcessing && (
+              <div className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                O'zgartirilmoqda...
+              </div>
+            )}
           </div>
 
           {/* Modify coins */}

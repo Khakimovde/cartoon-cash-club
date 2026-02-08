@@ -282,6 +282,44 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'set_user_level': {
+        const { target_telegram_id, referral_count } = body
+        if (target_telegram_id === undefined || referral_count === undefined) {
+          result = { success: false, error: 'target_telegram_id and referral_count required' }
+          break
+        }
+
+        const parsedCount = parseInt(referral_count)
+        if (isNaN(parsedCount) || parsedCount < 0) {
+          result = { success: false, error: 'Invalid referral_count' }
+          break
+        }
+
+        const { data: targetUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('telegram_id', target_telegram_id)
+          .maybeSingle()
+
+        if (!targetUser) {
+          result = { success: false, error: 'User not found' }
+          break
+        }
+
+        await supabase.from('users')
+          .update({ referral_count: parsedCount })
+          .eq('telegram_id', target_telegram_id)
+
+        const { data: updatedUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('telegram_id', target_telegram_id)
+          .maybeSingle()
+
+        result = { success: true, user: updatedUser }
+        break
+      }
+
       default:
         result = { success: false, error: 'Unknown action' }
     }
