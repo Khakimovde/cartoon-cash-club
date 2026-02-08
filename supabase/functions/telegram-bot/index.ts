@@ -70,12 +70,18 @@ Tayyor bo'lsangiz, quyidagi tugmani bosing! 👇`
     webAppUrl += `?ref=${encodeURIComponent(startParam)}`
   }
 
+  // Pass ref code in mini-app URL so useTelegram can pick it up
+  let miniAppUrl = 'https://698888fe460c6.xvest5.ru'
+  if (startParam) {
+    miniAppUrl += `?ref=${encodeURIComponent(startParam)}`
+  }
+
   const keyboard = {
     inline_keyboard: [
       [
         {
           text: '🍂 Pul ishlash',
-          web_app: { url: 'https://698888fe460c6.xvest5.ru' }
+          web_app: { url: miniAppUrl }
         }
       ],
       [
