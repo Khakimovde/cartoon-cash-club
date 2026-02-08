@@ -8,9 +8,9 @@ const corsHeaders = {
 // Referral bonus percentages based on referral count
 function getReferralBonusPercent(referralCount: number): number {
   if (referralCount >= 100) return 25
-  if (referralCount >= 50) return 20
-  if (referralCount >= 20) return 15
-  if (referralCount >= 10) return 7
+  if (referralCount >= 60) return 20
+  if (referralCount >= 30) return 15
+  if (referralCount >= 15) return 7
   return 5
 }
 
