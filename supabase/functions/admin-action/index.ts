@@ -93,37 +93,75 @@ Deno.serve(async (req) => {
       }
 
       case 'process_withdrawal': {
-        const { withdrawal_id, status } = body
-        if (!withdrawal_id || !['approved', 'rejected'].includes(status)) {
+        const { withdrawal_id, status, rejection_reason } = body
+        const validStatuses = ['processing', 'paid', 'rejected']
+        
+        if (!withdrawal_id || !validStatuses.includes(status)) {
           result = { success: false, error: 'Invalid params' }
           break
         }
 
-        if (status === 'rejected') {
-          const { data: withdrawal } = await supabase
-            .from('withdrawal_requests')
-            .select('*')
-            .eq('id', withdrawal_id)
-            .single()
+        // Get the withdrawal request
+        const { data: withdrawal } = await supabase
+          .from('withdrawal_requests')
+          .select('*')
+          .eq('id', withdrawal_id)
+          .single()
 
-          if (withdrawal) {
-            const { data: wUser } = await supabase
-              .from('users')
-              .select('coins')
-              .eq('telegram_id', withdrawal.user_telegram_id)
-              .single()
-
-            if (wUser) {
-              await supabase.from('users')
-                .update({ coins: wUser.coins + withdrawal.amount_coins })
-                .eq('telegram_id', withdrawal.user_telegram_id)
-            }
-          }
+        if (!withdrawal) {
+          result = { success: false, error: 'Withdrawal not found' }
+          break
         }
 
-        await supabase.from('withdrawal_requests')
-          .update({ status, processed_at: new Date().toISOString() })
-          .eq('id', withdrawal_id)
+        // Validate status transitions
+        const allowedTransitions: Record<string, string[]> = {
+          pending: ['processing', 'rejected'],
+          processing: ['paid', 'rejected'],
+        }
+
+        if (!allowedTransitions[withdrawal.status]?.includes(status)) {
+          result = { success: false, error: `Cannot change from ${withdrawal.status} to ${status}` }
+          break
+        }
+
+        // If rejecting, require reason and return coins
+        if (status === 'rejected') {
+          if (!rejection_reason?.trim()) {
+            result = { success: false, error: 'Rejection reason required' }
+            break
+          }
+
+          // Return coins to user
+          const { data: wUser } = await supabase
+            .from('users')
+            .select('coins')
+            .eq('telegram_id', withdrawal.user_telegram_id)
+            .single()
+
+          if (wUser) {
+            await supabase.from('users')
+              .update({ coins: (wUser.coins || 0) + withdrawal.amount_coins })
+              .eq('telegram_id', withdrawal.user_telegram_id)
+          }
+
+          await supabase.from('withdrawal_requests')
+            .update({
+              status: 'rejected',
+              rejection_reason: rejection_reason.trim(),
+              processed_at: new Date().toISOString(),
+            })
+            .eq('id', withdrawal_id)
+        } else {
+          // processing or paid
+          const updateData: Record<string, unknown> = { status }
+          if (status === 'paid') {
+            updateData.processed_at = new Date().toISOString()
+          }
+
+          await supabase.from('withdrawal_requests')
+            .update(updateData)
+            .eq('id', withdrawal_id)
+        }
 
         result = { success: true }
         break

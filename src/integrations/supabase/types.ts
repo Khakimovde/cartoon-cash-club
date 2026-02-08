@@ -207,6 +207,7 @@ export type Database = {
           created_at: string | null
           id: string
           processed_at: string | null
+          rejection_reason: string | null
           status: string | null
           user_telegram_id: number
         }
@@ -217,6 +218,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           processed_at?: string | null
+          rejection_reason?: string | null
           status?: string | null
           user_telegram_id: number
         }
@@ -227,6 +229,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           processed_at?: string | null
+          rejection_reason?: string | null
           status?: string | null
           user_telegram_id?: number
         }

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3, Users, Tv, TrendingUp, Clock, Check, X,
-  Plus, Trash2, Settings, Hash, Wallet, RefreshCw,
+  Plus, Trash2, Settings, Hash, Wallet, RefreshCw, Loader2, CheckCircle,
 } from "lucide-react";
 
 interface AdminPanelProps {
@@ -118,9 +118,19 @@ const StatsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdm
 };
 
 // ─── Withdrawals ───────────────────────────────────
+const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
+  pending: { label: "So'rov yuborildi", color: "text-yellow-600", bgColor: "bg-yellow-500/15" },
+  processing: { label: "O'tkazish jarayoni ketmoqda", color: "text-blue-500", bgColor: "bg-blue-500/15" },
+  paid: { label: "To'landi", color: "text-green-500", bgColor: "bg-green-500/15" },
+  rejected: { label: "Rad etildi", color: "text-red-500", bgColor: "bg-red-500/15" },
+};
+
 const WithdrawalsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdmin"] }) => {
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
 
   const fetchWithdrawals = async () => {
     setLoading(true);
@@ -131,8 +141,31 @@ const WithdrawalsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["inv
 
   useEffect(() => { fetchWithdrawals(); }, []);
 
-  const handleProcess = async (id: string, status: string) => {
-    await invokeAdmin("process_withdrawal", { withdrawal_id: id, status });
+  const handleApprove = async (id: string) => {
+    setProcessingAction(id);
+    await invokeAdmin("process_withdrawal", { withdrawal_id: id, status: "processing" });
+    setProcessingAction(null);
+    fetchWithdrawals();
+  };
+
+  const handleMarkPaid = async (id: string) => {
+    setProcessingAction(id);
+    await invokeAdmin("process_withdrawal", { withdrawal_id: id, status: "paid" });
+    setProcessingAction(null);
+    fetchWithdrawals();
+  };
+
+  const handleReject = async (id: string) => {
+    if (!rejectReason.trim()) return;
+    setProcessingAction(id);
+    await invokeAdmin("process_withdrawal", {
+      withdrawal_id: id,
+      status: "rejected",
+      rejection_reason: rejectReason.trim(),
+    });
+    setRejectingId(null);
+    setRejectReason("");
+    setProcessingAction(null);
     fetchWithdrawals();
   };
 
@@ -149,50 +182,144 @@ const WithdrawalsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["inv
       {withdrawals.length === 0 ? (
         <div className="text-center text-sm text-muted-foreground py-8">So'rovlar yo'q</div>
       ) : (
-        withdrawals.map((w) => (
-          <div key={w.id} className="card-3d p-3">
-            <div className="flex items-center justify-between mb-1">
-              <div>
-                <span className="font-bold text-sm text-foreground">
-                  {w.user?.first_name || w.user?.username || `ID: ${w.user_telegram_id}`}
-                </span>
-                <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  w.status === "pending"
-                    ? "bg-accent/20 text-accent-foreground"
-                    : w.status === "approved"
-                    ? "bg-success/20 text-success"
-                    : "bg-destructive/20 text-destructive"
-                }`}>
-                  {w.status === "pending" ? "Kutilmoqda" : w.status === "approved" ? "Tasdiqlangan" : "Rad etilgan"}
-                </span>
+        withdrawals.map((w) => {
+          const config = STATUS_CONFIG[w.status] || STATUS_CONFIG.pending;
+          const isProcessingThis = processingAction === w.id;
+
+          return (
+            <div key={w.id} className="card-3d p-3">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <span className="font-bold text-sm text-foreground">
+                    {w.user?.first_name || w.user?.username || `ID: ${w.user_telegram_id}`}
+                  </span>
+                  <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${config.bgColor} ${config.color}`}>
+                    {config.label}
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
-              <span>{w.amount_coins?.toLocaleString()} tanga</span>
-              <span>{w.amount_som?.toLocaleString()} so'm</span>
-              {w.card_number && <span>💳 {w.card_number}</span>}
-            </div>
-            <div className="text-[10px] text-muted-foreground mb-2">
-              {new Date(w.created_at).toLocaleString("uz-UZ")}
-            </div>
-            {w.status === "pending" && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleProcess(w.id, "approved")}
-                  className="flex-1 py-1.5 rounded-lg bg-success/10 text-success text-xs font-bold flex items-center justify-center gap-1"
-                >
-                  <Check className="w-3.5 h-3.5" /> Tasdiqlash
-                </button>
-                <button
-                  onClick={() => handleProcess(w.id, "rejected")}
-                  className="flex-1 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-bold flex items-center justify-center gap-1"
-                >
-                  <X className="w-3.5 h-3.5" /> Rad etish
-                </button>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground mb-1">
+                <span>{w.amount_coins?.toLocaleString()} tanga</span>
+                <span>{w.amount_som?.toLocaleString()} so'm</span>
               </div>
-            )}
-          </div>
-        ))
+              {w.card_number && (
+                <div className="text-xs text-foreground mb-1 font-medium">
+                  💳 {w.card_number.replace(/(\d{4})/g, "$1 ").trim()}
+                </div>
+              )}
+              <div className="text-[10px] text-muted-foreground mb-2">
+                {new Date(w.created_at).toLocaleString("uz-UZ")}
+              </div>
+
+              {/* Rejection reason display */}
+              {w.status === "rejected" && w.rejection_reason && (
+                <div className="text-[10px] text-red-500 mb-2 p-1.5 rounded bg-red-500/10 font-medium">
+                  📝 Sabab: {w.rejection_reason}
+                </div>
+              )}
+
+              {/* Pending: Approve or Reject */}
+              {w.status === "pending" && (
+                <>
+                  {rejectingId === w.id ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Rad etish sababini yozing..."
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-lg bg-secondary text-xs text-foreground placeholder:text-muted-foreground outline-none resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleReject(w.id)}
+                          disabled={!rejectReason.trim() || isProcessingThis}
+                          className="flex-1 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          {isProcessingThis ? "..." : "Rad etish"}
+                        </button>
+                        <button
+                          onClick={() => { setRejectingId(null); setRejectReason(""); }}
+                          className="flex-1 py-1.5 rounded-lg bg-secondary text-muted-foreground text-xs font-bold"
+                        >
+                          Bekor qilish
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleApprove(w.id)}
+                        disabled={isProcessingThis}
+                        className="flex-1 py-1.5 rounded-lg bg-blue-500/10 text-blue-500 text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        {isProcessingThis ? "..." : "Tasdiqlash"}
+                      </button>
+                      <button
+                        onClick={() => setRejectingId(w.id)}
+                        className="flex-1 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold flex items-center justify-center gap-1"
+                      >
+                        <X className="w-3.5 h-3.5" /> Rad etish
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Processing: Mark as Paid or Reject */}
+              {w.status === "processing" && (
+                <>
+                  {rejectingId === w.id ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Rad etish sababini yozing..."
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-lg bg-secondary text-xs text-foreground placeholder:text-muted-foreground outline-none resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleReject(w.id)}
+                          disabled={!rejectReason.trim() || isProcessingThis}
+                          className="flex-1 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          {isProcessingThis ? "..." : "Rad etish"}
+                        </button>
+                        <button
+                          onClick={() => { setRejectingId(null); setRejectReason(""); }}
+                          className="flex-1 py-1.5 rounded-lg bg-secondary text-muted-foreground text-xs font-bold"
+                        >
+                          Bekor qilish
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleMarkPaid(w.id)}
+                        disabled={isProcessingThis}
+                        className="flex-1 py-1.5 rounded-lg bg-green-500/10 text-green-500 text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        {isProcessingThis ? "..." : "To'landi"}
+                      </button>
+                      <button
+                        onClick={() => setRejectingId(w.id)}
+                        className="flex-1 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold flex items-center justify-center gap-1"
+                      >
+                        <X className="w-3.5 h-3.5" /> Rad etish
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })
       )}
     </div>
   );
@@ -302,7 +429,6 @@ const SettingsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invoke
 
   useEffect(() => {
     const fetchSettings = async () => {
-      // Settings are public readable
       const { supabase } = await import("@/integrations/supabase/client");
       const { data } = await supabase.from("app_settings").select("*");
       if (data) {

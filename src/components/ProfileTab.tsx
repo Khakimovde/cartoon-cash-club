@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Wallet, Users, TrendingUp } from "lucide-react";
+import { Wallet, Users, TrendingUp, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import coinImg from "@/assets/coin-3d.png";
 import { getCurrentLevel, getNextLevel } from "./ReferralTab";
@@ -16,19 +16,38 @@ interface ProfileTabProps {
   refreshUser: () => Promise<void>;
 }
 
+interface WithdrawalRequest {
+  id: string;
+  amount_coins: number;
+  amount_som: number;
+  card_number: string | null;
+  status: string;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
+  pending: { label: "So'rov yuborildi", color: "text-yellow-600", bgColor: "bg-yellow-500/15", icon: Clock },
+  processing: { label: "O'tkazish jarayoni ketmoqda", color: "text-blue-500", bgColor: "bg-blue-500/15", icon: Loader2 },
+  paid: { label: "To'landi", color: "text-green-500", bgColor: "bg-green-500/15", icon: CheckCircle },
+  rejected: { label: "Rad etildi", color: "text-red-500", bgColor: "bg-red-500/15", icon: XCircle },
+};
+
 const ProfileTab = ({
   coins, referralCount, user, telegramId, referralEarnings = 0,
   invokeAction, refreshUser,
 }: ProfileTabProps) => {
   const currentLevel = getCurrentLevel(referralCount);
   const nextLevel = getNextLevel(referralCount);
-  const [minWithdrawal, setMinWithdrawal] = useState(5000);
+  const [minWithdrawal, setMinWithdrawal] = useState(10000);
   const [exchangeCoins, setExchangeCoins] = useState(5000);
   const [exchangeSom, setExchangeSom] = useState(10000);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [cardNumber, setCardNumber] = useState("");
+  const [cardError, setCardError] = useState<string | null>(null);
   const [withdrawing, setWithdrawing] = useState(false);
-  const [withdrawResult, setWithdrawResult] = useState<string | null>(null);
+  const [withdrawResult, setWithdrawResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
 
   const progressToNext = nextLevel
     ? ((referralCount - currentLevel.minReferrals) / (nextLevel.minReferrals - currentLevel.minReferrals)) * 100
@@ -39,38 +58,69 @@ const ProfileTab = ({
       const { data } = await supabase.from("app_settings").select("*");
       if (data) {
         const get = (key: string) => data.find((s: any) => s.key === key)?.value;
-        setMinWithdrawal(parseInt(get("min_withdrawal_coins") || "5000"));
+        setMinWithdrawal(parseInt(get("min_withdrawal_coins") || "10000"));
         setExchangeCoins(parseInt(get("exchange_rate_coins") || "5000"));
         setExchangeSom(parseInt(get("exchange_rate_som") || "10000"));
       }
     };
     fetchSettings();
-  }, []);
+    fetchWithdrawals();
+  }, [telegramId]);
+
+  const fetchWithdrawals = async () => {
+    const { data } = await supabase
+      .from("withdrawal_requests")
+      .select("*")
+      .eq("user_telegram_id", telegramId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (data) setWithdrawals(data as WithdrawalRequest[]);
+  };
+
+  const formatCardNumber = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 16);
+    return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
+  };
+
+  const handleCardChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 16);
+    setCardNumber(raw);
+    setCardError(null);
+  };
 
   const handleWithdraw = async () => {
     const amount = parseInt(withdrawAmount);
     if (!amount || amount < minWithdrawal) {
-      setWithdrawResult(`Minimal: ${minWithdrawal.toLocaleString()} tanga`);
+      setWithdrawResult({ type: "error", message: `Minimal: ${minWithdrawal.toLocaleString()} tanga` });
       return;
     }
     if (amount > coins) {
-      setWithdrawResult("Tangalar yetarli emas");
+      setWithdrawResult({ type: "error", message: "Tangalar yetarli emas" });
+      return;
+    }
+
+    // Validate card number - must be exactly 16 digits
+    if (!cardNumber || cardNumber.length !== 16) {
+      setCardError("Karta raqami 16 ta raqamdan iborat bo'lishi kerak");
       return;
     }
 
     setWithdrawing(true);
     setWithdrawResult(null);
+    setCardError(null);
+
     const result = await invokeAction("request_withdrawal", {
       amount_coins: amount,
       card_number: cardNumber,
     });
 
     if (result?.success) {
-      setWithdrawResult(`✅ So'rov yuborildi: ${result.amount_som?.toLocaleString()} so'm`);
+      setWithdrawResult({ type: "success", message: `So'rov yuborildi: ${result.amount_som?.toLocaleString()} so'm` });
       setWithdrawAmount("");
       setCardNumber("");
+      fetchWithdrawals();
     } else {
-      setWithdrawResult(`❌ ${result?.error || "Xatolik yuz berdi"}`);
+      setWithdrawResult({ type: "error", message: result?.error || "Xatolik yuz berdi" });
     }
     setWithdrawing(false);
   };
@@ -207,12 +257,24 @@ const ProfileTab = ({
           {estimatedSom > 0 && (
             <p className="text-xs text-primary font-bold">≈ {estimatedSom.toLocaleString()} so'm</p>
           )}
-          <input
-            value={cardNumber}
-            onChange={(e) => setCardNumber(e.target.value)}
-            placeholder="Karta raqami (ixtiyoriy)"
-            className="w-full px-3 py-2 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none"
-          />
+          <div>
+            <input
+              value={formatCardNumber(cardNumber)}
+              onChange={handleCardChange}
+              placeholder="Karta raqami (16 ta raqam)"
+              inputMode="numeric"
+              maxLength={19}
+              className={`w-full px-3 py-2 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none ${
+                cardError ? "ring-2 ring-red-500/50" : ""
+              }`}
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              💳 Uzcard va Humo kartalari qabul qilinadi
+            </p>
+            {cardError && (
+              <p className="text-[10px] text-red-500 font-bold mt-0.5">{cardError}</p>
+            )}
+          </div>
         </div>
 
         <button
@@ -230,17 +292,63 @@ const ProfileTab = ({
         </button>
 
         {withdrawResult && (
-          <p className={`text-xs font-bold mt-2 text-center ${
-            withdrawResult.startsWith("✅") ? "text-success" : "text-destructive"
+          <div className={`mt-2 p-2 rounded-lg text-xs font-bold text-center ${
+            withdrawResult.type === "success"
+              ? "bg-yellow-500/15 text-yellow-600"
+              : "bg-red-500/15 text-red-500"
           }`}>
-            {withdrawResult}
-          </p>
+            {withdrawResult.type === "success" ? "⏳" : "❌"} {withdrawResult.message}
+          </div>
         )}
 
         <p className="text-[10px] text-muted-foreground mt-2 text-center">
           📅 To'lovlar har juma kuni amalga oshiriladi
         </p>
       </motion.div>
+
+      {/* Withdrawal History */}
+      {withdrawals.length > 0 && (
+        <motion.div variants={itemVariants} className="card-3d p-4">
+          <h3 className="font-extrabold text-sm text-foreground mb-3 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
+            So'rovlar tarixi
+          </h3>
+          <div className="space-y-2">
+            {withdrawals.map((w) => {
+              const config = STATUS_CONFIG[w.status] || STATUS_CONFIG.pending;
+              const StatusIcon = config.icon;
+              return (
+                <div key={w.id} className={`p-2.5 rounded-lg ${config.bgColor}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      <StatusIcon className={`w-3.5 h-3.5 ${config.color} ${w.status === "processing" ? "animate-spin" : ""}`} />
+                      <span className={`text-xs font-bold ${config.color}`}>{config.label}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(w.created_at).toLocaleDateString("uz-UZ")}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-foreground">
+                    <span className="font-bold">{w.amount_coins.toLocaleString()} tanga</span>
+                    <span className="text-muted-foreground">→</span>
+                    <span className="font-bold">{w.amount_som.toLocaleString()} so'm</span>
+                  </div>
+                  {w.card_number && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      💳 •••• {w.card_number.slice(-4)}
+                    </p>
+                  )}
+                  {w.status === "rejected" && w.rejection_reason && (
+                    <p className="text-[10px] text-red-500 mt-1 font-medium">
+                      📝 Sabab: {w.rejection_reason}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 };
