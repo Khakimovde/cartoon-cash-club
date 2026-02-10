@@ -127,6 +127,42 @@ export type Database = {
         }
         Relationships: []
       }
+      game_settings: {
+        Row: {
+          active: boolean
+          bet_amount: number
+          created_at: string
+          description: string
+          emoji: string
+          id: string
+          name: string
+          reward_amount: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          bet_amount?: number
+          created_at?: string
+          description?: string
+          emoji?: string
+          id: string
+          name: string
+          reward_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          bet_amount?: number
+          created_at?: string
+          description?: string
+          emoji?: string
+          id?: string
+          name?: string
+          reward_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       referrals: {
         Row: {
           bonus_coins: number | null

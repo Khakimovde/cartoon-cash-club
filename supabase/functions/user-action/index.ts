@@ -286,6 +286,58 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'game_result': {
+        const { game_id, won, bet_amount, reward_amount } = body
+        if (!game_id || bet_amount === undefined) {
+          result = { success: false, error: 'Missing game params' }
+          break
+        }
+
+        // Verify game exists and is active
+        const { data: gameSettings } = await supabase
+          .from('game_settings')
+          .select('*')
+          .eq('id', game_id)
+          .eq('active', true)
+          .maybeSingle()
+
+        if (!gameSettings) {
+          result = { success: false, error: 'O\'yin topilmadi yoki o\'chirilgan' }
+          break
+        }
+
+        const actualBet = gameSettings.bet_amount
+        const actualReward = gameSettings.reward_amount
+
+        if (user.coins < actualBet) {
+          result = { success: false, error: `Tangalar yetarli emas! ${actualBet} tanga kerak` }
+          break
+        }
+
+        if (won) {
+          // Won: add reward - bet (net gain)
+          const netGain = actualReward - actualBet
+          await supabase.from('users')
+            .update({ coins: user.coins + netGain })
+            .eq('telegram_id', telegram_id)
+
+          // Process referral bonus on net gain
+          if (netGain > 0) {
+            await processReferralBonus(supabase, telegram_id, netGain)
+          }
+
+          result = { success: true, won: true, coins_change: netGain }
+        } else {
+          // Lost: subtract bet
+          await supabase.from('users')
+            .update({ coins: Math.max(0, user.coins - actualBet) })
+            .eq('telegram_id', telegram_id)
+
+          result = { success: true, won: false, coins_change: -actualBet }
+        }
+        break
+      }
+
       default:
         result = { success: false, error: 'Unknown action' }
     }
