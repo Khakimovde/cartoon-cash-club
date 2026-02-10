@@ -5,16 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-// Get start of current half-hour window (:00 or :30)
-function getHalfHourBoundary(): string {
+// Get start of current 6-hour window (00:00, 06:00, 12:00, 18:00)
+function getSixHourBoundary(): string {
   const now = new Date()
-  const minutes = now.getMinutes()
+  const hour = now.getUTCHours()
   const boundary = new Date(now)
-  if (minutes >= 30) {
-    boundary.setMinutes(30, 0, 0)
-  } else {
-    boundary.setMinutes(0, 0, 0)
-  }
+  const windowStart = Math.floor(hour / 6) * 6
+  boundary.setUTCHours(windowStart, 0, 0, 0)
   return boundary.toISOString()
 }
 
@@ -142,8 +139,8 @@ Deno.serve(async (req) => {
         const adReward = parseInt(getSetting('ad_reward_coins') || '13')
         const maxAds = parseInt(getSetting('max_ads_per_session') || '10')
 
-        // Count ads in current half-hour window (not daily)
-        const windowStart = getHalfHourBoundary()
+        // Count ads in current 6-hour window (00:00, 06:00, 12:00, 18:00)
+        const windowStart = getSixHourBoundary()
         const { count: windowAds } = await supabase
           .from('ad_views')
           .select('*', { count: 'exact', head: true })

@@ -30,15 +30,17 @@ interface ChannelTask {
 // Per-user cooldown key
 const getCooldownKey = (tgId: number) => `ad_cooldown_end_${tgId}`;
 
-// Calculate next :00 or :30 boundary from now
-const getNextHalfHourBoundary = (): number => {
+// Calculate next 6-hour boundary (00:00, 06:00, 12:00, 18:00)
+const getNextSixHourBoundary = (): number => {
   const now = new Date();
-  const minutes = now.getMinutes();
+  const hour = now.getHours();
+  const nextWindow = Math.ceil((hour + 1) / 6) * 6;
   const next = new Date(now);
-  if (minutes < 30) {
-    next.setMinutes(30, 0, 0);
+  if (nextWindow >= 24) {
+    next.setDate(next.getDate() + 1);
+    next.setHours(0, 0, 0, 0);
   } else {
-    next.setHours(next.getHours() + 1, 0, 0, 0);
+    next.setHours(nextWindow, 0, 0, 0);
   }
   return next.getTime();
 };
@@ -92,7 +94,7 @@ const TasksTab = ({
         // No cooldown set - check if we need to auto-set one
         // If ads are maxed but no cooldown (e.g. cleared localStorage or new device)
         if (watchedAds >= maxAds && maxAds > 0) {
-          const endTime = getNextHalfHourBoundary();
+          const endTime = getNextSixHourBoundary();
           const now = Date.now();
           if (endTime > now) {
             // Still within the current window, set cooldown
@@ -156,9 +158,9 @@ const TasksTab = ({
     fetchData();
   }, []);
 
-  // Start cooldown aligned to next :00 or :30 boundary
+  // Start cooldown aligned to next 6-hour boundary (00, 06, 12, 18)
   const startCooldown = useCallback(() => {
-    const endTime = getNextHalfHourBoundary();
+    const endTime = getNextSixHourBoundary();
     localStorage.setItem(cooldownKey, endTime.toString());
     setCooldownRemaining(Math.ceil((endTime - Date.now()) / 1000));
   }, [cooldownKey]);
@@ -199,8 +201,10 @@ const TasksTab = ({
   };
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
+    if (hours > 0) return `${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 

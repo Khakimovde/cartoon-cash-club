@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import GameLayout from "./GameLayout";
 import type { GameSetting } from "../GamesTab";
+import { HANGMAN_WORDS } from "@/data/hangman-words";
 
 interface Props {
   game: GameSetting;
@@ -9,15 +10,8 @@ interface Props {
   onBack: () => void;
 }
 
-const UZBEK_WORDS = [
-  "KITOB", "OLMA", "MAKTAB", "DARYO", "QUYOSH", "BAHOR", "GULLAR",
-  "SHAHAR", "DENGIZ", "HAYVON", "BOZOR", "ODAM", "BOLALAR", "OVQAT",
-  "SUROV", "DUNYO", "TABIAT", "MASHINA", "KOMPYUTER", "TELEFON",
-  "BAYRAM", "MUZEY", "KUTUBXONA", "SAYOHAT", "FUTBOL",
-];
-
 const HangmanGame = ({ game, coins, onResult, onBack }: Props) => {
-  const [word] = useState(() => UZBEK_WORDS[Math.floor(Math.random() * UZBEK_WORDS.length)]);
+  const [word] = useState(() => HANGMAN_WORDS[Math.floor(Math.random() * HANGMAN_WORDS.length)]);
   const [guessed, setGuessed] = useState<Set<string>>(new Set());
   const [gameOver, setGameOver] = useState(false);
   const [won, setWon] = useState(false);

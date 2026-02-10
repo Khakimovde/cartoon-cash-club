@@ -10,7 +10,7 @@ interface Props {
 }
 
 const TOTAL_QUESTIONS = 10;
-const TIME_PER_QUESTION = 10;
+const TOTAL_TIME = 30; // 30 seconds for all 10 questions
 const MIN_CORRECT_TO_WIN = 7;
 
 function generateQuestion() {
@@ -55,55 +55,55 @@ const QuickMathGame = ({ game, coins, onResult, onBack }: Props) => {
   const [questions] = useState(() => Array.from({ length: TOTAL_QUESTIONS }, generateQuestion));
   const [current, setCurrent] = useState(0);
   const [correct, setCorrect] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(TIME_PER_QUESTION);
+  const [timeLeft, setTimeLeft] = useState(TOTAL_TIME);
   const [gameOver, setGameOver] = useState(false);
   const [won, setWon] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+
+  const finishGame = useCallback(async (finalCorrect: number) => {
+    const didWin = finalCorrect >= MIN_CORRECT_TO_WIN;
+    setWon(didWin);
+    setGameOver(true);
+    setProcessing(true);
+    await onResult(didWin);
+    setProcessing(false);
+  }, [onResult]);
 
   useEffect(() => {
     if (gameOver) return;
     const timer = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
-          handleNextQuestion(false);
-          return TIME_PER_QUESTION;
+          clearInterval(timer);
+          finishGame(correct);
+          return 0;
         }
         return t - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [current, gameOver]);
-
-  const handleNextQuestion = useCallback(
-    async (isCorrect: boolean) => {
-      const newCorrect = isCorrect ? correct + 1 : correct;
-      if (isCorrect) setCorrect(newCorrect);
-
-      if (current + 1 >= TOTAL_QUESTIONS) {
-        const didWin = newCorrect >= MIN_CORRECT_TO_WIN;
-        setWon(didWin);
-        setGameOver(true);
-        setProcessing(true);
-        await onResult(didWin);
-        setProcessing(false);
-      } else {
-        setCurrent(current + 1);
-        setTimeLeft(TIME_PER_QUESTION);
-        setSelectedAnswer(null);
-      }
-    },
-    [current, correct, onResult]
-  );
+  }, [gameOver, correct, finishGame]);
 
   const handleAnswer = (option: number) => {
     if (gameOver || selectedAnswer !== null) return;
     setSelectedAnswer(option);
     const isCorrect = option === questions[current].answer;
-    setTimeout(() => handleNextQuestion(isCorrect), 500);
+    const newCorrect = isCorrect ? correct + 1 : correct;
+    if (isCorrect) setCorrect(newCorrect);
+
+    setTimeout(() => {
+      if (current + 1 >= TOTAL_QUESTIONS) {
+        finishGame(newCorrect);
+      } else {
+        setCurrent(current + 1);
+        setSelectedAnswer(null);
+      }
+    }, 400);
   };
 
   const q = questions[current];
+  const timePercent = (timeLeft / TOTAL_TIME) * 100;
 
   return (
     <GameLayout
@@ -119,15 +119,19 @@ const QuickMathGame = ({ game, coins, onResult, onBack }: Props) => {
       <div className="space-y-4">
         {!gameOver ? (
           <>
-            {/* Timer bar */}
+            {/* Global timer bar */}
             <div className="progress-bar-3d">
               <div
                 className="fill"
                 style={{
-                  width: `${(timeLeft / TIME_PER_QUESTION) * 100}%`,
-                  background: timeLeft <= 3 ? "hsl(var(--destructive))" : undefined,
+                  width: `${timePercent}%`,
+                  background: timeLeft <= 5 ? "hsl(var(--destructive))" : undefined,
+                  transition: "width 1s linear",
                 }}
               />
+            </div>
+            <div className="text-center text-xs text-muted-foreground">
+              ⏱ {timeLeft} soniya qoldi
             </div>
 
             {/* Question */}
@@ -163,7 +167,7 @@ const QuickMathGame = ({ game, coins, onResult, onBack }: Props) => {
 
             {/* Score */}
             <div className="text-center text-xs text-muted-foreground">
-              To'g'ri: {correct}/{MIN_CORRECT_TO_WIN} kerak | Vaqt: {timeLeft}s
+              To'g'ri: {correct}/{MIN_CORRECT_TO_WIN} kerak
             </div>
           </>
         ) : (

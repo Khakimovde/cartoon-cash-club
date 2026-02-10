@@ -4,6 +4,7 @@ import { Gamepad2, ArrowLeft, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import coinImg from "@/assets/coin-3d.png";
 import { toast } from "sonner";
+import { showAd } from "@/lib/monetag";
 
 // Game components
 import HangmanGame from "./games/HangmanGame";
@@ -28,6 +29,7 @@ export interface GameSetting {
   bet_amount: number;
   reward_amount: number;
   active: boolean;
+  sort_order?: number;
 }
 
 const GAME_EMOJIS: Record<string, string> = {
@@ -44,7 +46,7 @@ const GAME_RULES: Record<string, string> = {
   mines: "Bomba sonini tanlang va xavfsiz katakchalarni oching. Bombaga tegsangiz — yutqizasiz!",
   sandiq: "9 ta sandiqdan birini tanlang. Ichida sovg'a bo'lsa — mukofot olasiz!",
   raqam_topish: "1 dan 100 gacha raqamni 7 ta urinishda toping. Har safar ko'rsatma beriladi!",
-  tez_hisob: "10 ta matematik savolga javob bering. 7 va undan ko'p to'g'ri javob — g'alaba!",
+  tez_hisob: "10 ta matematik savolga 30 soniyada javob bering. 7+ to'g'ri javob — g'alaba!",
   xotira: "Juft kartalarni toping! 25 ta harakatda barcha juftlarni topish kerak.",
 };
 
@@ -53,6 +55,7 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
   const [loading, setLoading] = useState(true);
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
+  const [showingAd, setShowingAd] = useState(false);
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -61,7 +64,11 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
         .select("*")
         .eq("active", true)
         .order("created_at");
-      if (data) setGames(data as GameSetting[]);
+      if (data) {
+        // Sort by sort_order if available
+        const sorted = (data as GameSetting[]).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+        setGames(sorted);
+      }
       setLoading(false);
     };
     fetchGames();
@@ -92,7 +99,7 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
     return result;
   };
 
-  const handleStartGame = (gameId: string) => {
+  const handleStartGame = async (gameId: string) => {
     const game = games.find((g) => g.id === gameId);
     if (!game) return;
 
@@ -100,6 +107,15 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
       toast.error(`Tangalar yetarli emas! ${game.bet_amount} tanga kerak`);
       return;
     }
+
+    // Show ad before game starts
+    setShowingAd(true);
+    try {
+      await showAd();
+    } catch (e) {
+      // Ad failed, still allow game
+    }
+    setShowingAd(false);
 
     setActiveGame(gameId);
     setSelectedGame(null);
@@ -182,12 +198,21 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
 
           <button
             onClick={() => handleStartGame(game.id)}
-            disabled={coins < game.bet_amount}
+            disabled={coins < game.bet_amount || showingAd}
             className="w-full py-4 rounded-2xl font-extrabold text-base flex items-center justify-center gap-2 disabled:opacity-50"
             style={{ background: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
           >
-            <Play className="w-5 h-5" />
-            Boshlash
+            {showingAd ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Reklama...
+              </>
+            ) : (
+              <>
+                <Play className="w-5 h-5" />
+                Boshlash
+              </>
+            )}
           </button>
 
           {coins < game.bet_amount && (
