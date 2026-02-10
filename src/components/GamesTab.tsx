@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Gamepad2, ArrowLeft } from "lucide-react";
+import { Gamepad2, ArrowLeft, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import coinImg from "@/assets/coin-3d.png";
 import { toast } from "sonner";
@@ -39,10 +39,20 @@ const GAME_EMOJIS: Record<string, string> = {
   xotira: "🧠",
 };
 
+const GAME_RULES: Record<string, string> = {
+  viselitsa: "Yashirin so'zni topish uchun harflarni tanlang. 7 ta xato qilsangiz — osilasiz va mag'lub bo'lasiz!",
+  mines: "Bomba sonini tanlang va xavfsiz katakchalarni oching. Bombaga tegsangiz — yutqizasiz!",
+  sandiq: "9 ta sandiqdan birini tanlang. Ichida sovg'a bo'lsa — mukofot olasiz!",
+  raqam_topish: "1 dan 100 gacha raqamni 7 ta urinishda toping. Har safar ko'rsatma beriladi!",
+  tez_hisob: "10 ta matematik savolga javob bering. 7 va undan ko'p to'g'ri javob — g'alaba!",
+  xotira: "Juft kartalarni toping! 25 ta harakatda barcha juftlarni topish kerak.",
+};
+
 const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProps) => {
   const [games, setGames] = useState<GameSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeGame, setActiveGame] = useState<string | null>(null);
+  const [selectedGame, setSelectedGame] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -82,17 +92,17 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
     return result;
   };
 
-  const handleStartGame = async (gameId: string) => {
+  const handleStartGame = (gameId: string) => {
     const game = games.find((g) => g.id === gameId);
-    if (!game) return false;
+    if (!game) return;
 
     if (coins < game.bet_amount) {
       toast.error(`Tangalar yetarli emas! ${game.bet_amount} tanga kerak`);
-      return false;
+      return;
     }
 
     setActiveGame(gameId);
-    return true;
+    setSelectedGame(null);
   };
 
   if (activeGame) {
@@ -118,6 +128,74 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
       case "xotira":
         return <MemoryGame {...gameProps} />;
     }
+  }
+
+  // Game start screen
+  if (selectedGame) {
+    const game = games.find((g) => g.id === selectedGame)!;
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="px-4 pt-4 pb-6 space-y-5"
+      >
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setSelectedGame(null)}
+            className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
+          >
+            <ArrowLeft className="w-5 h-5 text-foreground" />
+          </button>
+          <div className="flex items-center gap-1">
+            <img src={coinImg} alt="coin" className="w-4 h-4" />
+            <span className="text-sm font-bold text-coin">{coins.toLocaleString()}</span>
+          </div>
+        </div>
+
+        <div className="card-3d p-6 text-center space-y-4">
+          <div className="text-5xl">{GAME_EMOJIS[game.id] || game.emoji}</div>
+          <h2 className="text-2xl font-extrabold text-foreground">{game.name}</h2>
+          <p className="text-sm text-muted-foreground">{GAME_RULES[game.id] || game.description}</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-secondary rounded-2xl p-3">
+              <p className="text-xs text-muted-foreground">Tikish</p>
+              <div className="flex items-center justify-center gap-1 mt-1">
+                <img src={coinImg} alt="coin" className="w-4 h-4" />
+                <span className="text-lg font-extrabold text-destructive">{game.bet_amount}</span>
+              </div>
+            </div>
+            <div className="bg-secondary rounded-2xl p-3">
+              <p className="text-xs text-muted-foreground">Mukofot</p>
+              <div className="flex items-center justify-center gap-1 mt-1">
+                <img src={coinImg} alt="coin" className="w-4 h-4" />
+                <span className="text-lg font-extrabold text-primary">{game.reward_amount}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-destructive/10 rounded-xl p-3">
+            <p className="text-xs text-destructive font-bold">
+              ⚠️ Mag'lubiyatda -{game.bet_amount} tanga yo'qotasiz
+            </p>
+          </div>
+
+          <button
+            onClick={() => handleStartGame(game.id)}
+            disabled={coins < game.bet_amount}
+            className="w-full py-4 rounded-2xl font-extrabold text-base flex items-center justify-center gap-2 disabled:opacity-50"
+            style={{ background: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
+          >
+            <Play className="w-5 h-5" />
+            Boshlash
+          </button>
+
+          {coins < game.bet_amount && (
+            <p className="text-xs text-destructive font-bold">Tangalar yetarli emas!</p>
+          )}
+        </div>
+      </motion.div>
+    );
   }
 
   const containerVariants = {
@@ -156,7 +234,7 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
             key={game.id}
             variants={itemVariants}
             className="task-card cursor-pointer"
-            onClick={() => handleStartGame(game.id)}
+            onClick={() => setSelectedGame(game.id)}
           >
             <div className="task-card-icon" style={{ background: "var(--gradient-video)" }}>
               <span className="text-3xl">{GAME_EMOJIS[game.id] || game.emoji}</span>

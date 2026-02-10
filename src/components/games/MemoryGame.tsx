@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import GameLayout from "./GameLayout";
 import type { GameSetting } from "../GamesTab";
 
@@ -9,12 +9,15 @@ interface Props {
   onBack: () => void;
 }
 
-const EMOJIS = ["🍎", "🌽", "🍇", "🍋", "🍓", "🥑", "🍊", "🫐"];
-const PAIRS = 8;
-const MAX_MOVES = 20;
+const ALL_EMOJIS = [
+  "🍎", "🌽", "🍇", "🍋", "🍓", "🥑", "🍊", "🫐", "🍌", // fruits
+  "🐶", "🐱", "🐰", "🦊", "🐻", "🐼", "🐸", "🦁", "🐧", // animals
+];
+const PAIRS = 18; // 6x6 = 36 cards = 18 pairs
+const MAX_MOVES = 25;
 
 function shuffleCards(): string[] {
-  const selected = EMOJIS.slice(0, PAIRS);
+  const selected = ALL_EMOJIS.slice(0, PAIRS);
   const cards = [...selected, ...selected];
   for (let i = cards.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -47,7 +50,6 @@ const MemoryGame = ({ game, coins, onResult, onBack }: Props) => {
 
         const [first, second] = newFlipped;
         if (cards[first] === cards[second]) {
-          // Match found
           const newMatched = new Set(matched);
           newMatched.add(first);
           newMatched.add(second);
@@ -55,7 +57,6 @@ const MemoryGame = ({ game, coins, onResult, onBack }: Props) => {
           setFlipped([]);
           setChecking(false);
 
-          // Check win
           if (newMatched.size === cards.length) {
             setGameOver(true);
             setWon(true);
@@ -64,7 +65,6 @@ const MemoryGame = ({ game, coins, onResult, onBack }: Props) => {
             setProcessing(false);
           }
         } else {
-          // No match - check if out of moves
           setTimeout(async () => {
             setFlipped([]);
             setChecking(false);
@@ -94,9 +94,9 @@ const MemoryGame = ({ game, coins, onResult, onBack }: Props) => {
         </span>
       }
     >
-      <div className="space-y-4">
-        {/* Cards grid - 4x4 */}
-        <div className="grid grid-cols-4 gap-2">
+      <div className="space-y-3">
+        {/* Cards grid - 6x6 */}
+        <div className="grid grid-cols-6 gap-1.5">
           {cards.map((emoji, i) => {
             const isFlipped = flipped.includes(i);
             const isMatched = matched.has(i);
@@ -107,16 +107,16 @@ const MemoryGame = ({ game, coins, onResult, onBack }: Props) => {
                 key={i}
                 onClick={() => handleFlip(i)}
                 disabled={showFace || gameOver}
-                className={`aspect-square rounded-2xl text-2xl transition-all duration-300 flex items-center justify-center ${
+                className={`aspect-square rounded-xl text-lg transition-all duration-300 flex items-center justify-center ${
                   isMatched
-                    ? "bg-primary/10 ring-2 ring-primary"
+                    ? "bg-primary/10 ring-1 ring-primary"
                     : isFlipped
-                    ? "bg-secondary ring-2 ring-accent"
+                    ? "bg-secondary ring-1 ring-accent"
                     : "bg-secondary hover:bg-muted active:scale-95"
                 }`}
               >
                 {showFace ? emoji : (
-                  <span className="text-destructive font-extrabold text-xl">?</span>
+                  <span className="text-destructive font-extrabold text-sm">?</span>
                 )}
               </button>
             );
