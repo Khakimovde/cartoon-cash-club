@@ -22,20 +22,13 @@ const HangmanGame = ({ game, coins, onResult, onBack }: Props) => {
   const [gameOver, setGameOver] = useState(false);
   const [won, setWon] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [betPlaced, setBetPlaced] = useState(false);
 
   const wrongGuesses = [...guessed].filter((l) => !word.includes(l)).length;
-  const maxWrong = 6;
-  const isWordGuessed = [...word].every((l) => guessed.has(l));
+  const maxWrong = 7;
 
   const handleGuess = useCallback(
     async (letter: string) => {
       if (gameOver || guessed.has(letter) || processing) return;
-
-      if (!betPlaced) {
-        if (coins < game.bet_amount) return;
-        setBetPlaced(true);
-      }
 
       const newGuessed = new Set(guessed);
       newGuessed.add(letter);
@@ -58,18 +51,17 @@ const HangmanGame = ({ game, coins, onResult, onBack }: Props) => {
         setProcessing(false);
       }
     },
-    [guessed, gameOver, word, onResult, processing, betPlaced, coins, game.bet_amount]
+    [guessed, gameOver, word, onResult, processing]
   );
 
   const keyboard = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-  // Hangman SVG drawing
   const HangmanDrawing = () => (
-    <svg viewBox="0 0 200 220" className="w-40 h-40 mx-auto">
+    <svg viewBox="0 0 200 240" className="w-44 h-44 mx-auto">
       {/* Base */}
-      <line x1="20" y1="200" x2="100" y2="200" stroke="hsl(var(--foreground))" strokeWidth="4" strokeLinecap="round" />
+      <line x1="20" y1="220" x2="100" y2="220" stroke="hsl(var(--foreground))" strokeWidth="4" strokeLinecap="round" />
       {/* Pole */}
-      <line x1="60" y1="200" x2="60" y2="20" stroke="hsl(var(--foreground))" strokeWidth="4" strokeLinecap="round" />
+      <line x1="60" y1="220" x2="60" y2="20" stroke="hsl(var(--foreground))" strokeWidth="4" strokeLinecap="round" />
       {/* Top bar */}
       <line x1="60" y1="20" x2="140" y2="20" stroke="hsl(var(--foreground))" strokeWidth="4" strokeLinecap="round" />
       {/* Rope */}
@@ -80,23 +72,30 @@ const HangmanGame = ({ game, coins, onResult, onBack }: Props) => {
       )}
       {/* Body */}
       {wrongGuesses >= 2 && (
-        <line x1="140" y1="80" x2="140" y2="130" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
+        <line x1="140" y1="80" x2="140" y2="135" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
       )}
       {/* Left arm */}
       {wrongGuesses >= 3 && (
-        <line x1="140" y1="95" x2="115" y2="115" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
+        <line x1="140" y1="95" x2="115" y2="120" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
       )}
       {/* Right arm */}
       {wrongGuesses >= 4 && (
-        <line x1="140" y1="95" x2="165" y2="115" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
+        <line x1="140" y1="95" x2="165" y2="120" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
       )}
       {/* Left leg */}
       {wrongGuesses >= 5 && (
-        <line x1="140" y1="130" x2="115" y2="165" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
+        <line x1="140" y1="135" x2="115" y2="170" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
       )}
       {/* Right leg */}
       {wrongGuesses >= 6 && (
-        <line x1="140" y1="130" x2="165" y2="165" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
+        <line x1="140" y1="135" x2="165" y2="170" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
+      )}
+      {/* Hat (7th wrong) */}
+      {wrongGuesses >= 7 && (
+        <>
+          <line x1="125" y1="50" x2="155" y2="50" stroke="hsl(var(--destructive))" strokeWidth="3" strokeLinecap="round" />
+          <rect x="130" y="35" width="20" height="15" fill="hsl(var(--destructive))" rx="2" />
+        </>
       )}
     </svg>
   );
@@ -108,7 +107,7 @@ const HangmanGame = ({ game, coins, onResult, onBack }: Props) => {
       onBack={onBack}
       header={<span className="text-sm font-bold text-destructive">{wrongGuesses}/{maxWrong} xato</span>}
     >
-      <div className="text-center space-y-4">
+      <div className="text-center space-y-3">
         <HangmanDrawing />
 
         {/* Word display */}
@@ -129,7 +128,7 @@ const HangmanGame = ({ game, coins, onResult, onBack }: Props) => {
           ))}
         </div>
 
-        {/* Game over message */}
+        {/* Game over */}
         {gameOver && (
           <div className={`card-3d p-4 ${won ? "ring-2 ring-green-400" : "ring-2 ring-destructive"}`}>
             <p className="text-lg font-extrabold">
@@ -160,7 +159,7 @@ const HangmanGame = ({ game, coins, onResult, onBack }: Props) => {
                   key={letter}
                   onClick={() => handleGuess(letter)}
                   disabled={isGuessed || gameOver}
-                  className={`h-10 rounded-xl text-sm font-bold transition-all ${
+                  className={`h-11 rounded-xl text-sm font-bold transition-all ${
                     isCorrect
                       ? "bg-primary/20 text-primary"
                       : isWrong

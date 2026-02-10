@@ -9,8 +9,9 @@ interface Props {
   onBack: () => void;
 }
 
-const TOTAL_QUESTIONS = 5;
+const TOTAL_QUESTIONS = 10;
 const TIME_PER_QUESTION = 10;
+const MIN_CORRECT_TO_WIN = 7;
 
 function generateQuestion() {
   const ops = ["+", "-", "×"];
@@ -37,7 +38,6 @@ function generateQuestion() {
       a = 1; b = 1; answer = 2;
   }
 
-  // Generate 3 wrong options
   const options = new Set<number>([answer]);
   while (options.size < 4) {
     const offset = Math.floor(Math.random() * 20) - 10;
@@ -66,7 +66,6 @@ const QuickMathGame = ({ game, coins, onResult, onBack }: Props) => {
     const timer = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
-          // Time's up for this question
           handleNextQuestion(false);
           return TIME_PER_QUESTION;
         }
@@ -82,7 +81,7 @@ const QuickMathGame = ({ game, coins, onResult, onBack }: Props) => {
       if (isCorrect) setCorrect(newCorrect);
 
       if (current + 1 >= TOTAL_QUESTIONS) {
-        const didWin = newCorrect >= 3;
+        const didWin = newCorrect >= MIN_CORRECT_TO_WIN;
         setWon(didWin);
         setGameOver(true);
         setProcessing(true);
@@ -164,7 +163,7 @@ const QuickMathGame = ({ game, coins, onResult, onBack }: Props) => {
 
             {/* Score */}
             <div className="text-center text-xs text-muted-foreground">
-              To'g'ri: {correct} | Vaqt: {timeLeft}s
+              To'g'ri: {correct}/{MIN_CORRECT_TO_WIN} kerak | Vaqt: {timeLeft}s
             </div>
           </>
         ) : (
@@ -173,7 +172,7 @@ const QuickMathGame = ({ game, coins, onResult, onBack }: Props) => {
               {won ? "🧮 Ajoyib!" : "😔 Yetarli emas"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              {correct}/{TOTAL_QUESTIONS} to'g'ri javob
+              {correct}/{TOTAL_QUESTIONS} to'g'ri javob ({MIN_CORRECT_TO_WIN}+ kerak)
             </p>
             <p className="text-sm text-muted-foreground">
               {won ? `+${game.reward_amount} tanga` : `-${game.bet_amount} tanga`}
