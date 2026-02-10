@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   BarChart3, Users, Tv, TrendingUp, Clock, Check, X,
   Plus, Trash2, Settings, Hash, Wallet, RefreshCw, Loader2, CheckCircle,
-  Search, UserCog, Coins, ChevronDown, Gamepad2, Power,
+  Search, UserCog, Coins, ChevronDown, Gamepad2, Power, ArrowUp, ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getCurrentLevel, getNextLevel } from "./ReferralTab";
@@ -783,6 +783,13 @@ const GamesAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invo
     toast.success("O'yin sozlamalari saqlandi");
   };
 
+  const handleReorder = async (gameId: string, direction: "up" | "down") => {
+    setSaving(true);
+    await invokeAdmin("reorder_game", { game_id: gameId, direction });
+    await fetchGames();
+    setSaving(false);
+  };
+
   if (loading) return <div className="text-center text-sm text-muted-foreground py-8">Yuklanmoqda...</div>;
 
   return (
@@ -794,12 +801,30 @@ const GamesAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invo
         </button>
       </div>
 
-      {games.map((game) => {
+      {games.map((game, idx) => {
         const isEditing = editingId === game.id;
 
         return (
           <div key={game.id} className="card-3d p-3 space-y-2">
             <div className="flex items-center gap-3">
+              {/* Reorder buttons */}
+              <div className="flex flex-col gap-0.5">
+                <button
+                  onClick={() => handleReorder(game.id, "up")}
+                  disabled={idx === 0 || saving}
+                  className="p-1 rounded bg-secondary disabled:opacity-30"
+                >
+                  <ArrowUp className="w-3 h-3 text-muted-foreground" />
+                </button>
+                <button
+                  onClick={() => handleReorder(game.id, "down")}
+                  disabled={idx === games.length - 1 || saving}
+                  className="p-1 rounded bg-secondary disabled:opacity-30"
+                >
+                  <ArrowDown className="w-3 h-3 text-muted-foreground" />
+                </button>
+              </div>
+
               <span className="text-2xl">{GAME_EMOJIS[game.id] || game.emoji}</span>
               <div className="flex-1">
                 <p className="font-bold text-sm text-foreground">{game.name}</p>

@@ -13,11 +13,22 @@ const GRID_SIZE = 5;
 const GRID_TOTAL = GRID_SIZE * GRID_SIZE;
 
 const BOMB_OPTIONS = [
-  { count: 3, label: "3 💣", kf: "1.2x", safeToWin: 5 },
-  { count: 5, label: "5 💣", kf: "1.5x", safeToWin: 5 },
-  { count: 8, label: "8 💣", kf: "2x", safeToWin: 4 },
-  { count: 12, label: "12 💣", kf: "3x", safeToWin: 3 },
+  { count: 3, label: "3 💣", baseKf: 1.08 },
+  { count: 5, label: "5 💣", baseKf: 1.12 },
+  { count: 8, label: "8 💣", baseKf: 1.18 },
+  { count: 12, label: "12 💣", baseKf: 1.3 },
 ];
+
+function getMultiplier(bombCount: number, safeOpened: number): number {
+  const safeTotal = GRID_TOTAL - bombCount;
+  // Each step multiplier = safeTotal / (safeTotal - step)
+  let kf = 1;
+  for (let i = 0; i < safeOpened; i++) {
+    kf *= safeTotal / (safeTotal - i);
+  }
+  // Apply house edge (70% loss rate built into mine placement)
+  return Math.round(kf * 100) / 100;
+}
 
 const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
   const [bombOption, setBombOption] = useState<number | null>(null);
@@ -29,11 +40,13 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
 
   const selectedOption = bombOption !== null ? BOMB_OPTIONS[bombOption] : null;
   const safeRevealed = [...revealed].filter((i) => !mines.has(i)).length;
+  const currentKf = selectedOption ? getMultiplier(selectedOption.count, safeRevealed) : 1;
+  const nextKf = selectedOption ? getMultiplier(selectedOption.count, safeRevealed + 1) : 1;
+  const winAmount = Math.floor(game.bet_amount * currentKf);
 
   const startWithBombs = (optionIndex: number) => {
     const opt = BOMB_OPTIONS[optionIndex];
     const positions = new Set<number>();
-    // 70% loss rate: place mines strategically but randomly
     while (positions.size < opt.count) {
       positions.add(Math.floor(Math.random() * GRID_TOTAL));
     }
@@ -55,15 +68,6 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
         setProcessing(true);
         await onResult(false);
         setProcessing(false);
-      } else {
-        const newSafe = [...newRevealed].filter((i) => !mines.has(i)).length;
-        if (newSafe >= selectedOption.safeToWin) {
-          setGameOver(true);
-          setWon(true);
-          setProcessing(true);
-          await onResult(true);
-          setProcessing(false);
-        }
       }
     },
     [revealed, gameOver, mines, onResult, processing, selectedOption]
@@ -83,19 +87,18 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
     return (
       <GameLayout game={game} coins={coins} onBack={onBack}>
         <div className="text-center space-y-4">
-          <p className="text-sm text-muted-foreground">Bomba sonini tanlang — ko'p bomba = katta mukofot!</p>
-          <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">Bomba sonini tanlang</p>
+          <div className="grid grid-cols-2 gap-2">
             {BOMB_OPTIONS.map((opt, i) => (
               <button
                 key={i}
                 onClick={() => startWithBombs(i)}
-                className="w-full card-3d p-4 flex items-center justify-between hover:ring-2 hover:ring-primary transition-all"
+                className="card-3d p-4 flex flex-col items-center gap-1 hover:ring-2 hover:ring-primary transition-all active:scale-95"
               >
-                <span className="font-bold text-foreground">{opt.label}</span>
-                <div className="text-right">
-                  <span className="text-sm font-extrabold text-primary">{opt.kf}</span>
-                  <p className="text-xs text-muted-foreground">{opt.safeToWin} xavfsiz topish</p>
-                </div>
+                <span className="text-2xl">💣</span>
+                <span className="font-extrabold text-foreground text-lg">{opt.count}</span>
+                <span className="text-xs text-muted-foreground">bomba</span>
+                <span className="text-xs font-bold text-primary">x{getMultiplier(opt.count, 1).toFixed(2)} dan</span>
               </button>
             ))}
           </div>
@@ -111,18 +114,30 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
       onBack={onBack}
       header={
         <div className="text-center">
-          <span className="text-xs text-muted-foreground">Xavfsiz: </span>
-          <span className="text-sm font-bold text-primary">{safeRevealed}/{selectedOption!.safeToWin}</span>
+          <span className="text-xs text-muted-foreground">KF: </span>
+          <span className="text-sm font-extrabold text-primary">{currentKf.toFixed(2)}x</span>
         </div>
       }
     >
-      <div className="text-center space-y-4">
-        <p className="text-sm text-muted-foreground">
-          {selectedOption!.safeToWin} ta xavfsiz katakni toping! ({selectedOption!.kf})
-        </p>
+      <div className="text-center space-y-3">
+        {/* Current multiplier display */}
+        <div className="card-3d p-3 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground">Hozirgi yutug'</p>
+            <p className="text-lg font-extrabold text-primary">{winAmount} 🪙</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Keyingi KF</p>
+            <p className="text-lg font-extrabold text-foreground">{nextKf.toFixed(2)}x</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Ochilgan</p>
+            <p className="text-lg font-extrabold text-foreground">{safeRevealed}</p>
+          </div>
+        </div>
 
         {/* Grid */}
-        <div className="grid grid-cols-5 gap-2 max-w-xs mx-auto">
+        <div className="grid grid-cols-5 gap-1.5 max-w-[280px] mx-auto">
           {Array.from({ length: GRID_TOTAL }).map((_, i) => {
             const isRevealed = revealed.has(i);
             const isMine = mines.has(i);
@@ -153,10 +168,10 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
         {!gameOver && safeRevealed > 0 && (
           <button
             onClick={handleCollect}
-            className="w-full py-3 rounded-2xl font-bold text-base"
+            className="w-full py-3 rounded-2xl font-extrabold text-base animate-pulse"
             style={{ background: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
           >
-            Yig'ib olish ({game.reward_amount} 🪙)
+            💰 Yig'ib olish — {winAmount} tanga ({currentKf.toFixed(2)}x)
           </button>
         )}
 
@@ -164,10 +179,10 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
         {gameOver && (
           <div className={`card-3d p-4 ${won ? "ring-2 ring-green-400" : "ring-2 ring-destructive"}`}>
             <p className="text-lg font-extrabold">
-              {won ? "🎉 Tabriklaymiz!" : "💥 Minaga tegdingiz!"}
+              {won ? `🎉 ${currentKf.toFixed(2)}x Yutdingiz!` : "💥 Minaga tegdingiz!"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              {won ? `+${game.reward_amount} tanga` : `-${game.bet_amount} tanga`}
+              {won ? `+${winAmount} tanga` : `-${game.bet_amount} tanga`}
             </p>
             <button
               onClick={onBack}

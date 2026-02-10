@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import GameLayout from "./GameLayout";
 import type { GameSetting } from "../GamesTab";
 
@@ -13,7 +14,6 @@ type BoxContent = { type: "empty" } | { type: "prize"; multiplier: number; label
 
 function generateBoxes(): BoxContent[] {
   const boxes: BoxContent[] = Array.from({ length: 9 }, () => ({ type: "empty" as const }));
-  // Randomly place prizes: 1x, 1.5x, 2x
   const prizes = [
     { multiplier: 1, label: "1x" },
     { multiplier: 1.5, label: "1.5x" },
@@ -29,9 +29,6 @@ function generateBoxes(): BoxContent[] {
   });
   return boxes;
 }
-
-const BOX_EMOJIS_CLOSED = ["🎁", "🎀", "📦", "🎁", "🎀", "📦", "🎁", "🎀", "📦"];
-const EMPTY_EMOJIS = ["💨", "🍃", "😔"];
 
 const TreasureGame = ({ game, coins, onResult, onBack }: Props) => {
   const [boxes] = useState(generateBoxes);
@@ -77,18 +74,21 @@ const TreasureGame = ({ game, coins, onResult, onBack }: Props) => {
             const isPrize = box.type === "prize";
 
             return (
-              <button
+              <motion.button
                 key={i}
                 onClick={() => handleOpen(i)}
                 disabled={gameOver}
+                whileTap={{ scale: 0.9 }}
+                animate={isOpened ? { rotateY: 180, scale: 1.1 } : {}}
+                transition={{ duration: 0.4 }}
                 className={`aspect-square rounded-2xl text-3xl transition-all flex flex-col items-center justify-center gap-0.5 ${
                   isOpened
                     ? isPrize
-                      ? "bg-primary/15 ring-2 ring-primary scale-110"
+                      ? "bg-primary/15 ring-2 ring-primary"
                       : "bg-destructive/10 ring-2 ring-destructive"
                     : showAll && isPrize
                     ? "bg-primary/10 ring-1 ring-primary/50"
-                    : "bg-secondary hover:bg-muted active:scale-95 hover:scale-105"
+                    : "bg-secondary hover:bg-muted"
                 }`}
               >
                 {isOpened ? (
@@ -98,7 +98,7 @@ const TreasureGame = ({ game, coins, onResult, onBack }: Props) => {
                       <span className="text-xs font-extrabold text-primary">{box.label}</span>
                     </>
                   ) : (
-                    <span>{EMPTY_EMOJIS[i % 3]}</span>
+                    <span>💨</span>
                   )
                 ) : showAll && isPrize ? (
                   <>
@@ -106,9 +106,9 @@ const TreasureGame = ({ game, coins, onResult, onBack }: Props) => {
                     <span className="text-xs font-bold text-primary/70">{box.label}</span>
                   </>
                 ) : (
-                  <span>{BOX_EMOJIS_CLOSED[i]}</span>
+                  <span>🎁</span>
                 )}
-              </button>
+              </motion.button>
             );
           })}
         </div>

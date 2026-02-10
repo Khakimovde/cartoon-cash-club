@@ -324,7 +324,7 @@ Deno.serve(async (req) => {
         const { data: games } = await supabase
           .from('game_settings')
           .select('*')
-          .order('created_at')
+          .order('sort_order', { ascending: true })
 
         result = { games: games || [] }
         break
@@ -353,6 +353,51 @@ Deno.serve(async (req) => {
           .single()
 
         result = { success: true, game: updatedGame }
+        break
+      }
+
+      case 'reorder_game': {
+        const { game_id, direction } = body
+        if (!game_id || !direction) {
+          result = { success: false, error: 'game_id and direction required' }
+          break
+        }
+
+        const { data: allGames } = await supabase
+          .from('game_settings')
+          .select('id, sort_order')
+          .order('sort_order', { ascending: true })
+
+        if (!allGames || allGames.length < 2) {
+          result = { success: false, error: 'Not enough games to reorder' }
+          break
+        }
+
+        const idx = allGames.findIndex((g: any) => g.id === game_id)
+        if (idx === -1) {
+          result = { success: false, error: 'Game not found' }
+          break
+        }
+
+        const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+        if (swapIdx < 0 || swapIdx >= allGames.length) {
+          result = { success: false, error: 'Cannot move further' }
+          break
+        }
+
+        // Swap sort_orders
+        const currentOrder = allGames[idx].sort_order
+        const swapOrder = allGames[swapIdx].sort_order
+
+        await supabase.from('game_settings')
+          .update({ sort_order: swapOrder })
+          .eq('id', allGames[idx].id)
+
+        await supabase.from('game_settings')
+          .update({ sort_order: currentOrder })
+          .eq('id', allGames[swapIdx].id)
+
+        result = { success: true }
         break
       }
 
