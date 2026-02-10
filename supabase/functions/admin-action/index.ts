@@ -320,6 +320,42 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'get_games': {
+        const { data: games } = await supabase
+          .from('game_settings')
+          .select('*')
+          .order('created_at')
+
+        result = { games: games || [] }
+        break
+      }
+
+      case 'update_game': {
+        const { game_id, bet_amount, reward_amount, active } = body
+        if (!game_id) {
+          result = { success: false, error: 'game_id required' }
+          break
+        }
+
+        const updateData: Record<string, unknown> = {}
+        if (bet_amount !== undefined) updateData.bet_amount = parseInt(bet_amount)
+        if (reward_amount !== undefined) updateData.reward_amount = parseInt(reward_amount)
+        if (active !== undefined) updateData.active = active
+
+        await supabase.from('game_settings')
+          .update(updateData)
+          .eq('id', game_id)
+
+        const { data: updatedGame } = await supabase
+          .from('game_settings')
+          .select('*')
+          .eq('id', game_id)
+          .single()
+
+        result = { success: true, game: updatedGame }
+        break
+      }
+
       default:
         result = { success: false, error: 'Unknown action' }
     }

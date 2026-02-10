@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { ListChecks, Users, Trophy, User, Settings } from "lucide-react";
+import { ListChecks, Users, Trophy, User, Settings, Gamepad2 } from "lucide-react";
 
-export type TabType = "tasks" | "referral" | "leaderboard" | "profile" | "admin";
+export type TabType = "tasks" | "games" | "referral" | "leaderboard" | "profile" | "admin";
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -12,6 +12,7 @@ interface BottomNavProps {
 const BottomNav = ({ activeTab, onTabChange, isAdmin }: BottomNavProps) => {
   const tabs: { id: TabType; label: string; icon: typeof ListChecks }[] = [
     { id: "tasks", label: "Vazifalar", icon: ListChecks },
+    { id: "games", label: "O'yinlar", icon: Gamepad2 },
     { id: "referral", label: "Referal", icon: Users },
     { id: "leaderboard", label: "Top", icon: Trophy },
     { id: "profile", label: "Profil", icon: User },

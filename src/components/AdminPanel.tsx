@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   BarChart3, Users, Tv, TrendingUp, Clock, Check, X,
   Plus, Trash2, Settings, Hash, Wallet, RefreshCw, Loader2, CheckCircle,
-  Search, UserCog, Coins, ChevronDown,
+  Search, UserCog, Coins, ChevronDown, Gamepad2, Power,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getCurrentLevel, getNextLevel } from "./ReferralTab";
@@ -13,7 +13,7 @@ interface AdminPanelProps {
   refreshUser: () => Promise<void>;
 }
 
-type Section = "stats" | "withdrawals" | "channels" | "settings" | "users";
+type Section = "stats" | "withdrawals" | "channels" | "settings" | "users" | "games";
 
 const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
   const [section, setSection] = useState<Section>("stats");
@@ -23,6 +23,7 @@ const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
     { id: "users", label: "Foydalanuvchi", icon: UserCog },
     { id: "withdrawals", label: "So'rovlar", icon: Wallet },
     { id: "channels", label: "Kanallar", icon: Hash },
+    { id: "games", label: "O'yinlar", icon: Gamepad2 },
     { id: "settings", label: "Sozlamalar", icon: Settings },
   ];
 
@@ -66,6 +67,7 @@ const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
       {section === "users" && <UserManagementSection invokeAdmin={invokeAdmin} refreshUser={refreshUser} />}
       {section === "withdrawals" && <WithdrawalsSection invokeAdmin={invokeAdmin} />}
       {section === "channels" && <ChannelsSection invokeAdmin={invokeAdmin} />}
+      {section === "games" && <GamesAdminSection invokeAdmin={invokeAdmin} />}
       {section === "settings" && <SettingsSection invokeAdmin={invokeAdmin} />}
     </motion.div>
   );
@@ -733,6 +735,159 @@ const SettingsSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invoke
           </div>
         </div>
       ))}
+    </div>
+  );
+};
+
+// ─── Games Admin ───────────────────────────────────
+const GAME_EMOJIS: Record<string, string> = {
+  viselitsa: "🎯", mines: "💣", sandiq: "🎁",
+  raqam_topish: "🔢", tez_hisob: "🧮", xotira: "🧠",
+};
+
+const GamesAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdmin"] }) => {
+  const [games, setGames] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBet, setEditBet] = useState("");
+  const [editReward, setEditReward] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const fetchGames = async () => {
+    setLoading(true);
+    const data = await invokeAdmin("get_games");
+    if (data) setGames(data.games || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchGames(); }, []);
+
+  const handleToggle = async (gameId: string, currentActive: boolean) => {
+    setSaving(true);
+    await invokeAdmin("update_game", { game_id: gameId, active: !currentActive });
+    await fetchGames();
+    setSaving(false);
+    toast.success(currentActive ? "O'yin o'chirildi" : "O'yin yoqildi");
+  };
+
+  const handleSave = async (gameId: string) => {
+    setSaving(true);
+    await invokeAdmin("update_game", {
+      game_id: gameId,
+      bet_amount: editBet,
+      reward_amount: editReward,
+    });
+    await fetchGames();
+    setEditingId(null);
+    setSaving(false);
+    toast.success("O'yin sozlamalari saqlandi");
+  };
+
+  if (loading) return <div className="text-center text-sm text-muted-foreground py-8">Yuklanmoqda...</div>;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-sm">O'yinlar boshqaruvi</span>
+        <button onClick={fetchGames} className="p-1.5 rounded-lg bg-secondary">
+          <RefreshCw className="w-3.5 h-3.5 text-muted-foreground" />
+        </button>
+      </div>
+
+      {games.map((game) => {
+        const isEditing = editingId === game.id;
+
+        return (
+          <div key={game.id} className="card-3d p-3 space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{GAME_EMOJIS[game.id] || game.emoji}</span>
+              <div className="flex-1">
+                <p className="font-bold text-sm text-foreground">{game.name}</p>
+                <p className="text-[10px] text-muted-foreground">{game.description}</p>
+              </div>
+              {/* Toggle active */}
+              <button
+                onClick={() => handleToggle(game.id, game.active)}
+                disabled={saving}
+                className={`p-2 rounded-lg transition-colors ${
+                  game.active
+                    ? "bg-green-500/15 text-green-500"
+                    : "bg-red-500/15 text-red-500"
+                }`}
+              >
+                <Power className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Current settings */}
+            <div className="flex gap-2 text-xs">
+              <span className="px-2 py-1 rounded-lg bg-secondary text-muted-foreground">
+                Tikish: <span className="font-bold text-foreground">{game.bet_amount}</span>
+              </span>
+              <span className="px-2 py-1 rounded-lg bg-secondary text-muted-foreground">
+                Mukofot: <span className="font-bold text-foreground">{game.reward_amount}</span>
+              </span>
+              <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                game.active ? "bg-green-500/15 text-green-500" : "bg-red-500/15 text-red-500"
+              }`}>
+                {game.active ? "Yoqilgan" : "O'chirilgan"}
+              </span>
+            </div>
+
+            {/* Edit button */}
+            {!isEditing ? (
+              <button
+                onClick={() => {
+                  setEditingId(game.id);
+                  setEditBet(String(game.bet_amount));
+                  setEditReward(String(game.reward_amount));
+                }}
+                className="w-full py-1.5 rounded-lg bg-secondary text-xs font-bold text-muted-foreground"
+              >
+                Tahrirlash
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="text-[10px] text-muted-foreground">Tikish (tanga)</label>
+                    <input
+                      value={editBet}
+                      onChange={(e) => setEditBet(e.target.value)}
+                      type="number"
+                      className="w-full px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground outline-none"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] text-muted-foreground">Mukofot (tanga)</label>
+                    <input
+                      value={editReward}
+                      onChange={(e) => setEditReward(e.target.value)}
+                      type="number"
+                      className="w-full px-3 py-1.5 rounded-lg bg-secondary text-sm text-foreground outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSave(game.id)}
+                    disabled={saving}
+                    className="flex-1 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold"
+                  >
+                    {saving ? "..." : "Saqlash"}
+                  </button>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="flex-1 py-1.5 rounded-lg bg-secondary text-muted-foreground text-xs font-bold"
+                  >
+                    Bekor
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
