@@ -119,13 +119,14 @@ const AdWatchDrawer = ({
                 </div>
               </div>
 
-              {/* Cooldown timer */}
-              {isOnCooldown && (
+              {/* Cooldown / limit info */}
+              {isMaxReached && (
                 <div className="flex items-center justify-center gap-2 mb-3 py-2 px-3 rounded-lg bg-muted">
                   <Clock className="w-4 h-4 text-primary animate-pulse" />
                   <div className="text-center">
-                    <p className="text-[10px] text-muted-foreground">Keyingi reklama</p>
+                    <p className="text-[10px] text-muted-foreground">Bu oyna uchun limit tugadi</p>
                     <p className="text-lg font-extrabold text-primary">{formatTime(cooldownRemaining)}</p>
+                    <p className="text-[10px] text-muted-foreground">dan keyin yangilanadi</p>
                   </div>
                 </div>
               )}
@@ -136,12 +137,10 @@ const AdWatchDrawer = ({
                 disabled={isMaxReached || isWatching || isOnCooldown}
                 className="w-full py-3 rounded-xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 active:scale-[0.98] disabled:active:scale-100"
                 style={{
-                  background: isMaxReached
-                    ? "hsl(var(--success))"
-                    : isOnCooldown
+                  background: isMaxReached || isOnCooldown
                     ? "hsl(var(--muted))"
                     : "var(--gradient-primary)",
-                  color: isOnCooldown
+                  color: isMaxReached || isOnCooldown
                     ? "hsl(var(--muted-foreground))"
                     : "hsl(var(--primary-foreground))",
                   boxShadow:
@@ -158,8 +157,8 @@ const AdWatchDrawer = ({
                   </>
                 ) : isMaxReached ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    Bajarildi!
+                    <Clock className="w-4 h-4" />
+                    Limit tugadi
                   </>
                 ) : isOnCooldown ? (
                   <>
