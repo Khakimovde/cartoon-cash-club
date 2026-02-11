@@ -68,7 +68,7 @@ const TreasureGame = ({ game, coins, onResult, onBack }: Props) => {
                 onClick={() => handleOpen(i)}
                 disabled={gameOver}
                 whileTap={{ scale: 0.9 }}
-                animate={isOpened ? { rotateY: 180, scale: 1.1 } : {}}
+                animate={isOpened ? { scale: 1.1 } : {}}
                 transition={{ duration: 0.4 }}
                 className={`aspect-square rounded-2xl text-4xl transition-all flex flex-col items-center justify-center gap-1 ${
                   isOpened

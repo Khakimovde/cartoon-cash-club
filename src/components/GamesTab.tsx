@@ -100,7 +100,10 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
     return result;
   };
 
+  const [startingGame, setStartingGame] = useState(false);
+
   const handleStartGame = async (gameId: string) => {
+    if (startingGame || showingAd) return;
     const game = games.find((g) => g.id === gameId);
     if (!game) return;
 
@@ -108,6 +111,8 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
       toast.error(`Tangalar yetarli emas! ${game.bet_amount} tanga kerak`);
       return;
     }
+
+    setStartingGame(true);
 
     // Deduct bet immediately before ad
     const deductResult = await invokeAction("game_bet_deduct", {
@@ -117,6 +122,7 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
 
     if (!deductResult?.success) {
       toast.error(deductResult?.error || "Xatolik yuz berdi");
+      setStartingGame(false);
       return;
     }
 
@@ -133,6 +139,7 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
 
     setActiveGame(gameId);
     setSelectedGame(null);
+    setStartingGame(false);
   };
 
   if (activeGame) {
@@ -212,14 +219,14 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
 
           <button
             onClick={() => handleStartGame(game.id)}
-            disabled={coins < game.bet_amount || showingAd}
+            disabled={coins < game.bet_amount || showingAd || startingGame}
             className="w-full py-4 rounded-2xl font-extrabold text-base flex items-center justify-center gap-2 disabled:opacity-50"
             style={{ background: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
           >
-            {showingAd ? (
+            {showingAd || startingGame ? (
               <>
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Reklama...
+                {showingAd ? "Reklama..." : "Yuklanmoqda..."}
               </>
             ) : (
               <>
