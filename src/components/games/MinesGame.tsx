@@ -23,12 +23,25 @@ function getMultiplier(bombCount: number, safeOpened: number): number {
   if (safeOpened === 0) return 1;
   const opt = BOMB_OPTIONS.find(o => o.count === bombCount);
   const startKf = opt?.startKf || 1.08;
-  // Progressive: each step multiplies by (startKf + step * 0.03)
+  // Slow progressive growth: small additive increments
   let kf = startKf;
   for (let i = 1; i < safeOpened; i++) {
-    kf *= startKf + i * 0.03;
+    kf += 0.04 + i * 0.01;
   }
   return Math.round(kf * 100) / 100;
+}
+
+// Dynamic bomb probability: after 2 safe reveals, each next cell has increasing bomb chance
+function shouldBeBomb(bombCount: number, safeOpened: number, minesHit: number, totalMines: number, remainingCells: number): boolean {
+  if (safeOpened < 2) {
+    // First 2 clicks: use actual bomb ratio
+    return Math.random() < (totalMines / remainingCells);
+  }
+  // After 2 safe: high loss probability, scales with safe count
+  const baseLoss = 0.55; // 55% base bomb chance after 2 safe
+  const increment = 0.07; // +7% per additional safe reveal
+  const bombChance = Math.min(0.92, baseLoss + (safeOpened - 2) * increment);
+  return Math.random() < bombChance;
 }
 
 const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
@@ -38,6 +51,7 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
   const [gameOver, setGameOver] = useState(false);
   const [won, setWon] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [displayBombs, setDisplayBombs] = useState<Set<number>>(new Set());
 
   const selectedOption = bombOption !== null ? BOMB_OPTIONS[bombOption] : null;
   const safeRevealed = [...revealed].filter((i) => !mines.has(i)).length;
@@ -46,12 +60,8 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
   const winAmount = Math.floor(game.bet_amount * currentKf);
 
   const startWithBombs = (optionIndex: number) => {
-    const opt = BOMB_OPTIONS[optionIndex];
-    const positions = new Set<number>();
-    while (positions.size < opt.count) {
-      positions.add(Math.floor(Math.random() * GRID_TOTAL));
-    }
-    setMines(positions);
+    // Don't pre-place all bombs; use dynamic generation
+    setMines(new Set());
     setBombOption(optionIndex);
   };
 
@@ -61,14 +71,34 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
 
       const newRevealed = new Set(revealed);
       newRevealed.add(index);
-      setRevealed(newRevealed);
 
-      if (mines.has(index)) {
+      const currentSafe = [...revealed].filter((i) => !mines.has(i)).length;
+      const remainingCells = GRID_TOTAL - revealed.size;
+
+      // Dynamically decide if this cell is a bomb
+      const isBomb = shouldBeBomb(selectedOption.count, currentSafe, mines.size, selectedOption.count, remainingCells);
+
+      if (isBomb) {
+        const newMines = new Set(mines);
+        newMines.add(index);
+        setMines(newMines);
+        setRevealed(newRevealed);
+        // Generate random bomb positions for remaining unrevealed cells
+        const unrevealed = Array.from({ length: GRID_TOTAL }, (_, i) => i)
+          .filter(i => !newRevealed.has(i));
+        const bombsToShow = new Set(newMines);
+        const shuffled = unrevealed.sort(() => Math.random() - 0.5);
+        for (let j = 0; j < Math.min(selectedOption.count - newMines.size, shuffled.length); j++) {
+          bombsToShow.add(shuffled[j]);
+        }
+        setDisplayBombs(bombsToShow);
         setGameOver(true);
         setWon(false);
         setProcessing(true);
         await onResult(false);
         setProcessing(false);
+      } else {
+        setRevealed(newRevealed);
       }
     },
     [revealed, gameOver, mines, onResult, processing, selectedOption]
@@ -142,7 +172,7 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
           {Array.from({ length: GRID_TOTAL }).map((_, i) => {
             const isRevealed = revealed.has(i);
             const isMine = mines.has(i);
-            const showMine = gameOver && isMine;
+            const isDisplayBomb = gameOver && displayBombs.has(i) && !isRevealed;
 
             return (
               <button
@@ -154,12 +184,12 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
                     ? isMine
                       ? "bg-destructive/20 ring-2 ring-destructive"
                       : "bg-primary/15 ring-2 ring-primary"
-                    : showMine
+                    : isDisplayBomb
                     ? "bg-destructive/10"
                     : "bg-secondary hover:bg-muted active:scale-95"
                 }`}
               >
-                {isRevealed ? (isMine ? "💥" : "💎") : showMine ? "💣" : "?"}
+                {isRevealed ? (isMine ? "💥" : "💎") : isDisplayBomb ? "💣" : "?"}
               </button>
             );
           })}
