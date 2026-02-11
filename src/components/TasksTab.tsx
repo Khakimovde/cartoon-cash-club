@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, ChevronRight, Clock, ListChecks } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,17 +30,17 @@ interface ChannelTask {
 // Per-user cooldown key
 const getCooldownKey = (tgId: number) => `ad_cooldown_end_${tgId}`;
 
-// Calculate next 6-hour boundary (00:00, 06:00, 12:00, 18:00)
+// Calculate next 6-hour boundary (00:00, 06:00, 12:00, 18:00 UTC)
 const getNextSixHourBoundary = (): number => {
   const now = new Date();
-  const hour = now.getHours();
+  const hour = now.getUTCHours();
   const nextWindow = Math.ceil((hour + 1) / 6) * 6;
   const next = new Date(now);
   if (nextWindow >= 24) {
-    next.setDate(next.getDate() + 1);
-    next.setHours(0, 0, 0, 0);
+    next.setUTCDate(next.getUTCDate() + 1);
+    next.setUTCHours(0, 0, 0, 0);
   } else {
-    next.setHours(nextWindow, 0, 0, 0);
+    next.setUTCHours(nextWindow, 0, 0, 0);
   }
   return next.getTime();
 };
@@ -63,7 +63,6 @@ const TasksTab = ({
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [isAdDrawerOpen, setIsAdDrawerOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<ChannelTask | null>(null);
-  const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cooldownKey = getCooldownKey(telegramId);
 
   useEffect(() => {
@@ -74,73 +73,50 @@ const TasksTab = ({
     setLocalSubscribed(subscribedChannels);
   }, [subscribedChannels]);
 
-  // Check and manage cooldown timer (per-user, aligned to :00/:30)
+  // Cooldown logic: only show cooldown when server confirms ads are maxed
+  // Server's adsToday is the source of truth (synced via refreshUser)
   useEffect(() => {
-    const checkCooldown = () => {
-      const cooldownEnd = localStorage.getItem(cooldownKey);
-      if (cooldownEnd) {
-        const endTime = parseInt(cooldownEnd, 10);
-        const now = Date.now();
-        if (endTime > now) {
-          // Only keep cooldown if ads are actually maxed
-          if (watchedAds >= maxAds && maxAds > 0) {
-            setCooldownRemaining(Math.ceil((endTime - now) / 1000));
-          } else {
-            // Ads not maxed, clear stale cooldown
-            localStorage.removeItem(cooldownKey);
-            setCooldownRemaining(0);
-          }
-        } else {
-          // Cooldown expired - reset everything
-          localStorage.removeItem(cooldownKey);
-          setCooldownRemaining(0);
-          setWatchedAds(0);
-          refreshUser();
-        }
-      } else {
-        // No cooldown set - check if we need to auto-set one
-        if (watchedAds >= maxAds && maxAds > 0) {
-          const endTime = getNextSixHourBoundary();
-          const now = Date.now();
-          if (endTime > now) {
-            localStorage.setItem(cooldownKey, endTime.toString());
-            setCooldownRemaining(Math.ceil((endTime - now) / 1000));
-          } else {
-            setWatchedAds(0);
-            refreshUser();
-          }
-        } else {
-          setCooldownRemaining(0);
-        }
-      }
-    };
+    // If server says ads are not maxed, clear any stale cooldown
+    if (watchedAds < maxAds || maxAds <= 0) {
+      localStorage.removeItem(cooldownKey);
+      setCooldownRemaining(0);
+      return;
+    }
 
-    checkCooldown();
-
-    cooldownIntervalRef.current = setInterval(() => {
-      const cooldownEnd = localStorage.getItem(cooldownKey);
-      if (cooldownEnd) {
-        const endTime = parseInt(cooldownEnd, 10);
-        const now = Date.now();
-        if (endTime > now) {
-          setCooldownRemaining(Math.ceil((endTime - now) / 1000));
-        } else {
-          // Cooldown expired
-          localStorage.removeItem(cooldownKey);
-          setCooldownRemaining(0);
-          setWatchedAds(0);
-          refreshUser();
-        }
-      } else {
+    // Ads are maxed - set cooldown to next 6-hour boundary if not already set
+    let endTime: number;
+    const stored = localStorage.getItem(cooldownKey);
+    if (stored) {
+      endTime = parseInt(stored, 10);
+      // If stored cooldown already expired, refresh
+      if (endTime <= Date.now()) {
+        localStorage.removeItem(cooldownKey);
         setCooldownRemaining(0);
+        setWatchedAds(0);
+        refreshUser();
+        return;
+      }
+    } else {
+      endTime = getNextSixHourBoundary();
+      localStorage.setItem(cooldownKey, endTime.toString());
+    }
+
+    setCooldownRemaining(Math.ceil((endTime - Date.now()) / 1000));
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (endTime > now) {
+        setCooldownRemaining(Math.ceil((endTime - now) / 1000));
+      } else {
+        localStorage.removeItem(cooldownKey);
+        setCooldownRemaining(0);
+        setWatchedAds(0);
+        refreshUser();
+        clearInterval(interval);
       }
     }, 1000);
 
-    return () => {
-      if (cooldownIntervalRef.current) {
-        clearInterval(cooldownIntervalRef.current);
-      }
-    };
+    return () => clearInterval(interval);
   }, [cooldownKey, refreshUser, watchedAds, maxAds]);
 
   // Fetch channels and settings
