@@ -262,9 +262,17 @@ const TasksTab = ({
             </div>
             {isOnCooldown && (
               <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
-                <Clock className="w-3.5 h-3.5" />
+                <Clock className="w-3.5 h-3.5 text-primary" />
                 <span>
-                  Keyingi: <span className="font-bold text-primary">{formatTime(cooldownRemaining)}</span>
+                  Keyingi reklama: <span className="font-bold text-primary">{formatTime(cooldownRemaining)}</span>
+                </span>
+              </div>
+            )}
+            {isMaxReached && !isOnCooldown && (
+              <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                <Clock className="w-3.5 h-3.5 text-primary" />
+                <span>
+                  Keyingi oyna: <span className="font-bold text-primary">{formatTime(Math.ceil((getNextSixHourBoundary() - Date.now()) / 1000))}</span>
                 </span>
               </div>
             )}

@@ -78,6 +78,7 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
     const game = games.find((g) => g.id === gameId);
     if (!game) return;
 
+    // Bet already deducted on start. Only process reward if won.
     const result = await invokeAction("game_result", {
       game_id: gameId,
       won,
@@ -107,6 +108,19 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
       toast.error(`Tangalar yetarli emas! ${game.bet_amount} tanga kerak`);
       return;
     }
+
+    // Deduct bet immediately before ad
+    const deductResult = await invokeAction("game_bet_deduct", {
+      game_id: gameId,
+      bet_amount: game.bet_amount,
+    });
+
+    if (!deductResult?.success) {
+      toast.error(deductResult?.error || "Xatolik yuz berdi");
+      return;
+    }
+
+    await refreshUser();
 
     // Show ad before game starts
     setShowingAd(true);

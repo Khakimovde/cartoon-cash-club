@@ -13,20 +13,21 @@ const GRID_SIZE = 5;
 const GRID_TOTAL = GRID_SIZE * GRID_SIZE;
 
 const BOMB_OPTIONS = [
-  { count: 3, label: "3 💣", baseKf: 1.08 },
-  { count: 5, label: "5 💣", baseKf: 1.12 },
-  { count: 8, label: "8 💣", baseKf: 1.18 },
-  { count: 12, label: "12 💣", baseKf: 1.3 },
+  { count: 3, label: "3 💣", startKf: 1.08 },
+  { count: 5, label: "5 💣", startKf: 1.15 },
+  { count: 8, label: "8 💣", startKf: 1.30 },
+  { count: 12, label: "12 💣", startKf: 1.55 },
 ];
 
 function getMultiplier(bombCount: number, safeOpened: number): number {
-  const safeTotal = GRID_TOTAL - bombCount;
-  // Each step multiplier = safeTotal / (safeTotal - step)
-  let kf = 1;
-  for (let i = 0; i < safeOpened; i++) {
-    kf *= safeTotal / (safeTotal - i);
+  if (safeOpened === 0) return 1;
+  const opt = BOMB_OPTIONS.find(o => o.count === bombCount);
+  const startKf = opt?.startKf || 1.08;
+  // Progressive: each step multiplies by (startKf + step * 0.03)
+  let kf = startKf;
+  for (let i = 1; i < safeOpened; i++) {
+    kf *= startKf + i * 0.03;
   }
-  // Apply house edge (70% loss rate built into mine placement)
   return Math.round(kf * 100) / 100;
 }
 
@@ -46,8 +47,13 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
 
   const startWithBombs = (optionIndex: number) => {
     const opt = BOMB_OPTIONS[optionIndex];
+    // 90% loss rate: place bombs to cover ~90% of the grid area strategically
+    // Use more bombs than displayed to ensure 90% hit rate
+    const actualBombs = Math.min(GRID_TOTAL - 1, Math.max(opt.count, Math.floor(GRID_TOTAL * 0.9)));
+    // But show only the selected bomb count for UX, use actual for placement
+    // Actually: place bombs so that 90% of cells are bombs
     const positions = new Set<number>();
-    while (positions.size < opt.count) {
+    while (positions.size < actualBombs) {
       positions.add(Math.floor(Math.random() * GRID_TOTAL));
     }
     setMines(positions);
@@ -98,7 +104,7 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
                 <span className="text-2xl">💣</span>
                 <span className="font-extrabold text-foreground text-lg">{opt.count}</span>
                 <span className="text-xs text-muted-foreground">bomba</span>
-                <span className="text-xs font-bold text-primary">x{getMultiplier(opt.count, 1).toFixed(2)} dan</span>
+                <span className="text-xs font-bold text-primary">x{opt.startKf.toFixed(2)} dan</span>
               </button>
             ))}
           </div>
