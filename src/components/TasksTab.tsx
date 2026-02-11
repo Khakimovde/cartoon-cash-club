@@ -30,19 +30,23 @@ interface ChannelTask {
 // Per-user cooldown key
 const getCooldownKey = (tgId: number) => `ad_cooldown_end_${tgId}`;
 
-// Calculate next 6-hour boundary (00:00, 06:00, 12:00, 18:00 UTC)
+// Calculate next 6-hour boundary in Tashkent time (UTC+5)
+// Windows: 00:00, 06:00, 12:00, 18:00 Tashkent
 const getNextSixHourBoundary = (): number => {
   const now = new Date();
-  const hour = now.getUTCHours();
+  const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
+  const tashkentTime = new Date(now.getTime() + TASHKENT_OFFSET_MS);
+  const hour = tashkentTime.getUTCHours();
   const nextWindow = Math.ceil((hour + 1) / 6) * 6;
-  const next = new Date(now);
+  const next = new Date(tashkentTime);
   if (nextWindow >= 24) {
     next.setUTCDate(next.getUTCDate() + 1);
     next.setUTCHours(0, 0, 0, 0);
   } else {
     next.setUTCHours(nextWindow, 0, 0, 0);
   }
-  return next.getTime();
+  // Convert back to UTC timestamp
+  return next.getTime() - TASHKENT_OFFSET_MS;
 };
 
 const TasksTab = ({
