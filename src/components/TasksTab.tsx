@@ -82,7 +82,14 @@ const TasksTab = ({
         const endTime = parseInt(cooldownEnd, 10);
         const now = Date.now();
         if (endTime > now) {
-          setCooldownRemaining(Math.ceil((endTime - now) / 1000));
+          // Only keep cooldown if ads are actually maxed
+          if (watchedAds >= maxAds && maxAds > 0) {
+            setCooldownRemaining(Math.ceil((endTime - now) / 1000));
+          } else {
+            // Ads not maxed, clear stale cooldown
+            localStorage.removeItem(cooldownKey);
+            setCooldownRemaining(0);
+          }
         } else {
           // Cooldown expired - reset everything
           localStorage.removeItem(cooldownKey);
@@ -92,16 +99,13 @@ const TasksTab = ({
         }
       } else {
         // No cooldown set - check if we need to auto-set one
-        // If ads are maxed but no cooldown (e.g. cleared localStorage or new device)
         if (watchedAds >= maxAds && maxAds > 0) {
           const endTime = getNextSixHourBoundary();
           const now = Date.now();
           if (endTime > now) {
-            // Still within the current window, set cooldown
             localStorage.setItem(cooldownKey, endTime.toString());
             setCooldownRemaining(Math.ceil((endTime - now) / 1000));
           } else {
-            // Already past the boundary, reset
             setWatchedAds(0);
             refreshUser();
           }

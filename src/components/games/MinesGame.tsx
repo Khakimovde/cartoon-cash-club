@@ -47,13 +47,8 @@ const MinesGame = ({ game, coins, onResult, onBack }: Props) => {
 
   const startWithBombs = (optionIndex: number) => {
     const opt = BOMB_OPTIONS[optionIndex];
-    // 90% loss rate: place bombs to cover ~90% of the grid area strategically
-    // Use more bombs than displayed to ensure 90% hit rate
-    const actualBombs = Math.min(GRID_TOTAL - 1, Math.max(opt.count, Math.floor(GRID_TOTAL * 0.9)));
-    // But show only the selected bomb count for UX, use actual for placement
-    // Actually: place bombs so that 90% of cells are bombs
     const positions = new Set<number>();
-    while (positions.size < actualBombs) {
+    while (positions.size < opt.count) {
       positions.add(Math.floor(Math.random() * GRID_TOTAL));
     }
     setMines(positions);
