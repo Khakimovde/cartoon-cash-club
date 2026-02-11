@@ -5,14 +5,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-// Get start of current 6-hour window (00:00, 06:00, 12:00, 18:00 UTC)
+// Get start of current 6-hour window in Tashkent time (UTC+5)
+// Windows: 00:00, 06:00, 12:00, 18:00 Tashkent
 function getSixHourBoundary(): string {
   const now = new Date()
-  const hour = now.getUTCHours()
-  const boundary = new Date(now)
+  const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000
+  const tashkentTime = new Date(now.getTime() + TASHKENT_OFFSET_MS)
+  const hour = tashkentTime.getUTCHours()
   const windowStart = Math.floor(hour / 6) * 6
+  const boundary = new Date(tashkentTime)
   boundary.setUTCHours(windowStart, 0, 0, 0)
-  return boundary.toISOString()
+  // Convert back to UTC
+  const utcBoundary = new Date(boundary.getTime() - TASHKENT_OFFSET_MS)
+  return utcBoundary.toISOString()
 }
 
 // Send Telegram bot message to a user
