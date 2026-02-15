@@ -14,6 +14,21 @@ function generatePromoCode(): string {
   return code
 }
 
+// Get the current 30-min window start: :00 or :30 of current hour
+function getWindowStart(): Date {
+  const now = new Date()
+  const minutes = now.getMinutes() >= 30 ? 30 : 0
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), minutes, 0, 0)
+}
+
+// Get the next 30-min boundary: :00 or :30
+function getWindowEnd(): number {
+  const now = new Date()
+  const nextMinutes = now.getMinutes() >= 30 ? 0 : 30
+  const nextHour = now.getMinutes() >= 30 ? now.getHours() + 1 : now.getHours()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), nextHour, nextMinutes, 0, 0).getTime()
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -38,8 +53,7 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'watch_promo_ad': {
-        // 30-minute window
-        const windowStart = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+        const windowStart = getWindowStart().toISOString()
         const maxAds = 10
 
         const { count } = await supabase
@@ -62,7 +76,6 @@ Deno.serve(async (req) => {
         const isComplete = newCount >= maxAds
 
         if (isComplete) {
-          // Generate unique promo code
           let code = generatePromoCode()
           let attempts = 0
           while (attempts < 5) {
@@ -76,7 +89,6 @@ Deno.serve(async (req) => {
             attempts++
           }
 
-          // Random reward 10-50
           const reward = Math.floor(Math.random() * 41) + 10
 
           await supabase.from('promo_codes').insert({
@@ -93,27 +105,17 @@ Deno.serve(async (req) => {
       }
 
       case 'get_promo_status': {
-        // Count ads in last 30 min
-        const windowStart = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+        const windowStart = getWindowStart().toISOString()
         const { count } = await supabase
           .from('promo_ad_views')
           .select('*', { count: 'exact', head: true })
           .eq('user_telegram_id', telegram_id)
           .gte('viewed_at', windowStart)
 
-        // Get the earliest ad in this window for cooldown calc
+        // Cooldown = next :00 or :30 boundary
         let cooldownEnd = 0
         if ((count || 0) >= 10) {
-          const { data: earliest } = await supabase
-            .from('promo_ad_views')
-            .select('viewed_at')
-            .eq('user_telegram_id', telegram_id)
-            .gte('viewed_at', windowStart)
-            .order('viewed_at', { ascending: true })
-            .limit(1)
-          if (earliest && earliest.length > 0) {
-            cooldownEnd = new Date(earliest[0].viewed_at).getTime() + 30 * 60 * 1000
-          }
+          cooldownEnd = getWindowEnd()
         }
 
         // Get user's latest generated (unused by others) promo code
@@ -144,7 +146,75 @@ Deno.serve(async (req) => {
 
         const cleanCode = code.trim().toUpperCase()
 
-        // Find the promo code
+        // First check admin promo codes
+        const { data: adminPromo } = await supabase
+          .from('admin_promo_codes')
+          .select('*')
+          .eq('code', cleanCode)
+          .eq('active', true)
+          .maybeSingle()
+
+        if (adminPromo) {
+          // Check expiry
+          if (new Date(adminPromo.expires_at) < new Date()) {
+            result = { success: false, error: "Promokod muddati o'tgan" }
+            break
+          }
+          // Check max uses
+          if (adminPromo.used_count >= adminPromo.max_uses) {
+            result = { success: false, error: 'Bu promokod allaqachon ishlatilgan' }
+            break
+          }
+          // Check if this user already used it
+          const { data: existingUse } = await supabase
+            .from('admin_promo_redemptions')
+            .select('id')
+            .eq('promo_code_id', adminPromo.id)
+            .eq('user_telegram_id', telegram_id)
+            .maybeSingle()
+
+          if (existingUse) {
+            result = { success: false, error: 'Siz bu promokodni allaqachon ishlatgansiz' }
+            break
+          }
+
+          // Redeem
+          await supabase.from('admin_promo_redemptions').insert({
+            promo_code_id: adminPromo.id,
+            user_telegram_id: telegram_id,
+            coins_earned: adminPromo.coins_reward,
+          })
+
+          await supabase.from('admin_promo_codes')
+            .update({ used_count: adminPromo.used_count + 1 })
+            .eq('id', adminPromo.id)
+
+          // Add coins
+          const { data: user } = await supabase
+            .from('users')
+            .select('coins')
+            .eq('telegram_id', telegram_id)
+            .single()
+
+          if (user) {
+            await supabase.from('users')
+              .update({ coins: (user.coins || 0) + adminPromo.coins_reward })
+              .eq('telegram_id', telegram_id)
+          }
+
+          // Save to history
+          await supabase.from('promo_history').insert({
+            user_telegram_id: telegram_id,
+            code: cleanCode,
+            coins_earned: adminPromo.coins_reward,
+            source: 'admin',
+          })
+
+          result = { success: true, coins_earned: adminPromo.coins_reward }
+          break
+        }
+
+        // Then check user promo codes
         const { data: promo } = await supabase
           .from('promo_codes')
           .select('*')
@@ -156,32 +226,24 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Check if expired
         if (new Date(promo.expires_at) < new Date()) {
-          // Delete expired
           await supabase.from('promo_codes').delete().eq('id', promo.id)
-          result = { success: false, error: 'Promokod muddati o\'tgan' }
+          result = { success: false, error: "Promokod muddati o'tgan" }
           break
         }
 
-        // Check if already used
         if (promo.used_by_telegram_id) {
           result = { success: false, error: 'Bu promokod allaqachon ishlatilgan' }
           break
         }
 
-        // Can't use own code
-        if (promo.created_by_telegram_id === telegram_id) {
-          result = { success: false, error: 'O\'z promokodingizni ishlata olmaysiz' }
-          break
-        }
-
+        // Allow own code usage now
         // Mark as used
         await supabase.from('promo_codes')
           .update({ used_by_telegram_id: telegram_id, used_at: new Date().toISOString() })
           .eq('id', promo.id)
 
-        // Add coins to user
+        // Add coins
         const { data: user } = await supabase
           .from('users')
           .select('coins')
@@ -194,10 +256,30 @@ Deno.serve(async (req) => {
             .eq('telegram_id', telegram_id)
         }
 
+        // Save to history
+        await supabase.from('promo_history').insert({
+          user_telegram_id: telegram_id,
+          code: cleanCode,
+          coins_earned: promo.coins_reward,
+          source: promo.created_by_telegram_id === telegram_id ? 'own' : 'user',
+        })
+
         // Delete the promo code after use
         await supabase.from('promo_codes').delete().eq('id', promo.id)
 
         result = { success: true, coins_earned: promo.coins_reward }
+        break
+      }
+
+      case 'get_promo_history': {
+        const { data: history } = await supabase
+          .from('promo_history')
+          .select('*')
+          .eq('user_telegram_id', telegram_id)
+          .order('redeemed_at', { ascending: false })
+          .limit(50)
+
+        result = { success: true, history: history || [] }
         break
       }
 

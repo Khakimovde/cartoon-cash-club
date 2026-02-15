@@ -35,6 +35,74 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_promo_codes: {
+        Row: {
+          active: boolean
+          code: string
+          coins_reward: number
+          created_at: string
+          created_by_telegram_id: number
+          expires_at: string
+          id: string
+          max_uses: number
+          used_count: number
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          coins_reward?: number
+          created_at?: string
+          created_by_telegram_id: number
+          expires_at?: string
+          id?: string
+          max_uses?: number
+          used_count?: number
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          coins_reward?: number
+          created_at?: string
+          created_by_telegram_id?: number
+          expires_at?: string
+          id?: string
+          max_uses?: number
+          used_count?: number
+        }
+        Relationships: []
+      }
+      admin_promo_redemptions: {
+        Row: {
+          coins_earned: number
+          id: string
+          promo_code_id: string
+          redeemed_at: string
+          user_telegram_id: number
+        }
+        Insert: {
+          coins_earned?: number
+          id?: string
+          promo_code_id: string
+          redeemed_at?: string
+          user_telegram_id: number
+        }
+        Update: {
+          coins_earned?: number
+          id?: string
+          promo_code_id?: string
+          redeemed_at?: string
+          user_telegram_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_promo_redemptions_promo_code_id_fkey"
+            columns: ["promo_code_id"]
+            isOneToOne: false
+            referencedRelation: "admin_promo_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_users: {
         Row: {
           created_at: string | null
@@ -214,6 +282,33 @@ export type Database = {
           id?: string
           used_at?: string | null
           used_by_telegram_id?: number | null
+        }
+        Relationships: []
+      }
+      promo_history: {
+        Row: {
+          code: string
+          coins_earned: number
+          id: string
+          redeemed_at: string
+          source: string
+          user_telegram_id: number
+        }
+        Insert: {
+          code: string
+          coins_earned?: number
+          id?: string
+          redeemed_at?: string
+          source?: string
+          user_telegram_id: number
+        }
+        Update: {
+          code?: string
+          coins_earned?: number
+          id?: string
+          redeemed_at?: string
+          source?: string
+          user_telegram_id?: number
         }
         Relationships: []
       }
