@@ -401,6 +401,83 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'get_admin_promos': {
+        const { data: promos } = await supabase
+          .from('admin_promo_codes')
+          .select('*')
+          .order('created_at', { ascending: false })
+
+        result = { promos: promos || [] }
+        break
+      }
+
+      case 'create_admin_promo': {
+        const { code, coins_reward, max_uses, expires_hours } = body
+        if (!code || !code.trim()) {
+          result = { success: false, error: 'Promokod kiritilmagan' }
+          break
+        }
+
+        const cleanCode = code.trim().toUpperCase()
+
+        // Check uniqueness across both tables
+        const { data: existingAdmin } = await supabase
+          .from('admin_promo_codes')
+          .select('id')
+          .eq('code', cleanCode)
+          .maybeSingle()
+
+        const { data: existingUser } = await supabase
+          .from('promo_codes')
+          .select('id')
+          .eq('code', cleanCode)
+          .maybeSingle()
+
+        if (existingAdmin || existingUser) {
+          result = { success: false, error: 'Bu kod allaqachon mavjud' }
+          break
+        }
+
+        const expiresAt = new Date(Date.now() + (parseInt(expires_hours) || 24) * 60 * 60 * 1000).toISOString()
+
+        await supabase.from('admin_promo_codes').insert({
+          code: cleanCode,
+          coins_reward: parseInt(coins_reward) || 50,
+          max_uses: parseInt(max_uses) || 1,
+          expires_at: expiresAt,
+          created_by_telegram_id: telegram_id,
+        })
+
+        result = { success: true }
+        break
+      }
+
+      case 'toggle_admin_promo': {
+        const { promo_id, active } = body
+        if (!promo_id) {
+          result = { success: false, error: 'promo_id required' }
+          break
+        }
+        await supabase.from('admin_promo_codes')
+          .update({ active })
+          .eq('id', promo_id)
+        result = { success: true }
+        break
+      }
+
+      case 'delete_admin_promo': {
+        const { promo_id } = body
+        if (!promo_id) {
+          result = { success: false, error: 'promo_id required' }
+          break
+        }
+        await supabase.from('admin_promo_codes')
+          .delete()
+          .eq('id', promo_id)
+        result = { success: true }
+        break
+      }
+
       default:
         result = { success: false, error: 'Unknown action' }
     }

@@ -4,6 +4,7 @@ import {
   BarChart3, Users, Tv, TrendingUp, Clock, Check, X,
   Plus, Trash2, Settings, Hash, Wallet, RefreshCw, Loader2, CheckCircle,
   Search, UserCog, Coins, ChevronDown, Gamepad2, Power, ArrowUp, ArrowDown,
+  Gift, Ticket,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getCurrentLevel, getNextLevel } from "./ReferralTab";
@@ -13,7 +14,7 @@ interface AdminPanelProps {
   refreshUser: () => Promise<void>;
 }
 
-type Section = "stats" | "withdrawals" | "channels" | "settings" | "users" | "games";
+type Section = "stats" | "withdrawals" | "channels" | "settings" | "users" | "games" | "promo";
 
 const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
   const [section, setSection] = useState<Section>("stats");
@@ -24,6 +25,7 @@ const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
     { id: "withdrawals", label: "So'rovlar", icon: Wallet },
     { id: "channels", label: "Kanallar", icon: Hash },
     { id: "games", label: "O'yinlar", icon: Gamepad2 },
+    { id: "promo", label: "Promokod", icon: Gift },
     { id: "settings", label: "Sozlamalar", icon: Settings },
   ];
 
@@ -68,6 +70,7 @@ const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
       {section === "withdrawals" && <WithdrawalsSection invokeAdmin={invokeAdmin} />}
       {section === "channels" && <ChannelsSection invokeAdmin={invokeAdmin} />}
       {section === "games" && <GamesAdminSection invokeAdmin={invokeAdmin} />}
+      {section === "promo" && <PromoAdminSection invokeAdmin={invokeAdmin} />}
       {section === "settings" && <SettingsSection invokeAdmin={invokeAdmin} />}
     </motion.div>
   );
@@ -913,6 +916,180 @@ const GamesAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invo
           </div>
         );
       })}
+    </div>
+  );
+};
+
+// ─── Promo Admin ──────────────────────────────────
+const PromoAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdmin"] }) => {
+  const [promos, setPromos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newPromo, setNewPromo] = useState({ code: "", coins_reward: "50", max_uses: "1", expires_hours: "24" });
+  const [creating, setCreating] = useState(false);
+
+  const fetchPromos = async () => {
+    setLoading(true);
+    const data = await invokeAdmin("get_admin_promos");
+    if (data) setPromos(data.promos || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchPromos(); }, []);
+
+  const handleCreate = async () => {
+    if (!newPromo.code.trim()) {
+      toast.error("Promokod kiriting");
+      return;
+    }
+    setCreating(true);
+    const data = await invokeAdmin("create_admin_promo", {
+      code: newPromo.code.trim().toUpperCase(),
+      coins_reward: parseInt(newPromo.coins_reward) || 50,
+      max_uses: parseInt(newPromo.max_uses) || 1,
+      expires_hours: parseInt(newPromo.expires_hours) || 24,
+    });
+    if (data?.success) {
+      toast.success("Promokod yaratildi!");
+      setNewPromo({ code: "", coins_reward: "50", max_uses: "1", expires_hours: "24" });
+      setShowAdd(false);
+      fetchPromos();
+    } else {
+      toast.error(data?.error || "Xatolik");
+    }
+    setCreating(false);
+  };
+
+  const handleToggle = async (id: string, active: boolean) => {
+    await invokeAdmin("toggle_admin_promo", { promo_id: id, active: !active });
+    fetchPromos();
+    toast.success(active ? "O'chirildi" : "Yoqildi");
+  };
+
+  const handleDelete = async (id: string) => {
+    await invokeAdmin("delete_admin_promo", { promo_id: id });
+    fetchPromos();
+    toast.success("O'chirildi");
+  };
+
+  if (loading) return <div className="text-center text-sm text-muted-foreground py-8">Yuklanmoqda...</div>;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-sm">Admin promokodlar</span>
+        <button
+          onClick={() => setShowAdd(!showAdd)}
+          className="p-1.5 rounded-lg bg-primary text-primary-foreground"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="card-3d p-3 space-y-2">
+          <div>
+            <label className="text-[10px] text-muted-foreground">Promokod</label>
+            <input
+              value={newPromo.code}
+              onChange={(e) => setNewPromo({ ...newPromo, code: e.target.value.toUpperCase() })}
+              placeholder="MAXSUS2024"
+              maxLength={20}
+              className="w-full px-3 py-2 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none uppercase tracking-wider font-bold"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[10px] text-muted-foreground">Tanga</label>
+              <input
+                value={newPromo.coins_reward}
+                onChange={(e) => setNewPromo({ ...newPromo, coins_reward: e.target.value })}
+                type="number"
+                className="w-full px-3 py-2 rounded-lg bg-secondary text-sm text-foreground outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">Necha kishi</label>
+              <input
+                value={newPromo.max_uses}
+                onChange={(e) => setNewPromo({ ...newPromo, max_uses: e.target.value })}
+                type="number"
+                className="w-full px-3 py-2 rounded-lg bg-secondary text-sm text-foreground outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">Soat</label>
+              <input
+                value={newPromo.expires_hours}
+                onChange={(e) => setNewPromo({ ...newPromo, expires_hours: e.target.value })}
+                type="number"
+                className="w-full px-3 py-2 rounded-lg bg-secondary text-sm text-foreground outline-none"
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleCreate}
+            disabled={creating || !newPromo.code.trim()}
+            className="w-full py-2 rounded-lg text-sm font-bold disabled:opacity-50"
+            style={{ background: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
+          >
+            {creating ? "Yaratilmoqda..." : "Yaratish"}
+          </button>
+        </div>
+      )}
+
+      {promos.length === 0 ? (
+        <div className="text-center text-sm text-muted-foreground py-8">Promokodlar yo'q</div>
+      ) : (
+        promos.map((p) => {
+          const isExpired = new Date(p.expires_at) < new Date();
+          const isFull = p.used_count >= p.max_uses;
+          return (
+            <div key={p.id} className="card-3d p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Ticket className="w-4 h-4 text-primary" />
+                <span className="font-bold text-sm text-foreground tracking-wider flex-1">{p.code}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  !p.active || isExpired ? "bg-red-500/15 text-red-500"
+                  : isFull ? "bg-yellow-500/15 text-yellow-600"
+                  : "bg-green-500/15 text-green-500"
+                }`}>
+                  {!p.active ? "O'chiq" : isExpired ? "Muddati o'tgan" : isFull ? "To'lgan" : "Faol"}
+                </span>
+              </div>
+              <div className="flex gap-2 text-xs">
+                <span className="px-2 py-1 rounded-lg bg-secondary text-muted-foreground">
+                  💰 <span className="font-bold text-foreground">{p.coins_reward}</span> tanga
+                </span>
+                <span className="px-2 py-1 rounded-lg bg-secondary text-muted-foreground">
+                  👥 <span className="font-bold text-foreground">{p.used_count}/{p.max_uses}</span>
+                </span>
+                <span className="px-2 py-1 rounded-lg bg-secondary text-muted-foreground">
+                  ⏰ {new Date(p.expires_at).toLocaleDateString("uz-UZ")}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleToggle(p.id, p.active)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 ${
+                    p.active ? "bg-yellow-500/10 text-yellow-600" : "bg-green-500/10 text-green-500"
+                  }`}
+                >
+                  <Power className="w-3.5 h-3.5" />
+                  {p.active ? "O'chirish" : "Yoqish"}
+                </button>
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  className="flex-1 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold flex items-center justify-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  O'chirish
+                </button>
+              </div>
+            </div>
+          );
+        })
+      )}
     </div>
   );
 };

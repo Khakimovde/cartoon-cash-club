@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
-import { Gift, Clock, Copy, CheckCircle2, Ticket, ChevronRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Gift, Clock, Copy, CheckCircle2, Ticket, ChevronRight, History, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { showAd } from "@/lib/monetag";
 import coinImg from "@/assets/coin-3d.png";
@@ -14,6 +14,14 @@ interface PromoTabProps {
   refreshUser: () => Promise<void>;
 }
 
+// Get next :00 or :30 boundary
+function getNextBoundary(): number {
+  const now = new Date();
+  const nextMinutes = now.getMinutes() >= 30 ? 0 : 30;
+  const nextHour = now.getMinutes() >= 30 ? now.getHours() + 1 : now.getHours();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), nextHour, nextMinutes, 0, 0).getTime();
+}
+
 const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
   const [adsCount, setAdsCount] = useState(0);
   const [isWatching, setIsWatching] = useState(false);
@@ -23,9 +31,11 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
   const [promoInput, setPromoInput] = useState("");
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const maxAds = 10;
 
-  // Fetch promo status on mount
   useEffect(() => {
     fetchStatus();
   }, [telegramId]);
@@ -84,6 +94,10 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
             toast.success(`Reklama ko'rildi! ${data.ads_count}/${maxAds}`);
           }
         } else if (data?.error) {
+          if (data.error === 'Limit tugadi') {
+            setCooldownEnd(getNextBoundary());
+            setAdsCount(maxAds);
+          }
           toast.error(data.error);
         }
       } else {
@@ -110,6 +124,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
         toast.success(`+${data.coins_earned} tanga qo'shildi! 🎉`);
         setPromoInput("");
         await refreshUser();
+        await fetchStatus();
       } else {
         toast.error(data?.error || "Xatolik");
       }
@@ -128,6 +143,26 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
       toast.success("Promokod nusxalandi!");
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("promo-action", {
+        body: { action: "get_promo_history", telegram_id: telegramId },
+      });
+      if (error) throw error;
+      setHistory(data.history || []);
+    } catch (err) {
+      console.error("History error:", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const toggleHistory = () => {
+    if (!showHistory) fetchHistory();
+    setShowHistory(!showHistory);
   };
 
   const formatTime = (seconds: number) => {
@@ -163,9 +198,65 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
             <Gift className="w-5 h-5 text-primary-foreground" strokeWidth={2.5} />
           </div>
           <h2 className="text-xl font-extrabold text-foreground">Promokod</h2>
+          <button
+            onClick={toggleHistory}
+            className="ml-auto w-8 h-8 rounded-lg bg-secondary flex items-center justify-center"
+          >
+            <History className="w-4 h-4 text-muted-foreground" />
+          </button>
         </div>
         <p className="text-sm text-muted-foreground">Reklama ko'ring va promokod oling</p>
       </motion.div>
+
+      {/* History overlay */}
+      <AnimatePresence>
+        {showHistory && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="card-3d p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <History className="w-4 h-4 text-primary" />
+                  <h3 className="font-bold text-sm text-foreground">Promokod tarixi</h3>
+                </div>
+                <button onClick={() => setShowHistory(false)} className="p-1 rounded-lg bg-secondary">
+                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              </div>
+              {historyLoading ? (
+                <div className="text-center py-4">
+                  <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
+                </div>
+              ) : history.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">Hali promokod ishlatilmagan</p>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {history.map((h) => (
+                    <div key={h.id} className="flex items-center justify-between p-2 rounded-lg bg-secondary">
+                      <div>
+                        <p className="text-xs font-bold text-foreground tracking-wider">{h.code}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(h.redeemed_at).toLocaleDateString("uz-UZ")}
+                          {h.source === 'admin' && ' · Admin'}
+                          {h.source === 'own' && ' · O\'zim'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <img src={coinImg} alt="coin" className="w-3.5 h-3.5" />
+                        <span className="text-xs font-bold text-coin">+{h.coins_earned}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Watch Ads Card */}
       <motion.div variants={itemVariants} className="card-3d p-4">
@@ -246,7 +337,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
             <h3 className="font-bold text-foreground">Sizning promokodingiz</h3>
           </div>
           <p className="text-[10px] text-muted-foreground mb-2">
-            Bu kodni boshqalarga yuboring. Faqat 1 kishi ishlata oladi. 24 soat amal qiladi.
+            Bu kodni boshqalarga yuboring yoki o'zingiz ishlating. Faqat 1 marta ishlatiladi. 24 soat amal qiladi.
           </p>
           <div className="flex items-center gap-2 mb-2">
             <div className="flex-1 bg-muted rounded-xl px-4 py-3 text-center">
@@ -280,7 +371,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
           <h3 className="font-bold text-foreground">Promokod kiritish</h3>
         </div>
         <p className="text-[10px] text-muted-foreground mb-3">
-          Do'stingizdan olgan promokodni kiriting va tanga yuting
+          Promokodni kiriting va tanga yuting
         </p>
         <div className="flex gap-2">
           <Input
