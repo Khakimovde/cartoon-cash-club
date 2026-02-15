@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import BottomNav, { type TabType } from "@/components/BottomNav";
 import TasksTab from "@/components/TasksTab";
-import GamesTab from "@/components/GamesTab";
+import PromoTab from "@/components/PromoTab";
 import ReferralTab from "@/components/ReferralTab";
 import LeaderboardTab from "@/components/LeaderboardTab";
 import ProfileTab from "@/components/ProfileTab";
@@ -49,12 +49,11 @@ const Index = () => {
             refreshUser={refreshUser}
           />
         );
-      case "games":
+      case "promo":
         return (
-          <GamesTab
+          <PromoTab
             coins={coins}
             telegramId={telegramId}
-            invokeAction={invokeAction}
             refreshUser={refreshUser}
           />
         );

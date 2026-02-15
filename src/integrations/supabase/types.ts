@@ -166,6 +166,57 @@ export type Database = {
         }
         Relationships: []
       }
+      promo_ad_views: {
+        Row: {
+          id: string
+          user_telegram_id: number
+          viewed_at: string
+        }
+        Insert: {
+          id?: string
+          user_telegram_id: number
+          viewed_at?: string
+        }
+        Update: {
+          id?: string
+          user_telegram_id?: number
+          viewed_at?: string
+        }
+        Relationships: []
+      }
+      promo_codes: {
+        Row: {
+          code: string
+          coins_reward: number
+          created_at: string
+          created_by_telegram_id: number
+          expires_at: string
+          id: string
+          used_at: string | null
+          used_by_telegram_id: number | null
+        }
+        Insert: {
+          code: string
+          coins_reward?: number
+          created_at?: string
+          created_by_telegram_id: number
+          expires_at?: string
+          id?: string
+          used_at?: string | null
+          used_by_telegram_id?: number | null
+        }
+        Update: {
+          code?: string
+          coins_reward?: number
+          created_at?: string
+          created_by_telegram_id?: number
+          expires_at?: string
+          id?: string
+          used_at?: string | null
+          used_by_telegram_id?: number | null
+        }
+        Relationships: []
+      }
       referrals: {
         Row: {
           bonus_coins: number | null
