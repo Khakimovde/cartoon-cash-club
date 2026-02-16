@@ -205,7 +205,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
             <History className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
-        <p className="text-sm text-muted-foreground">Reklama ko'ring va promokod oling</p>
+        <p className="text-sm text-muted-foreground">10 ta reklama ko'rib promokod oling</p>
       </motion.div>
 
       {/* History overlay */}
@@ -265,8 +265,8 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
             <img src={videoAdIcon} alt="Reklama" className="w-8 h-8 object-contain" />
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-foreground">Reklama ko'rish</h3>
-            <p className="text-xs text-muted-foreground">{adsCount}/{maxAds} ta ko'rildi</p>
+            <h3 className="font-bold text-foreground">Promokod olish</h3>
+            <p className="text-xs text-muted-foreground">{adsCount}/{maxAds} ta reklama ko'rildi</p>
           </div>
         </div>
 
@@ -322,7 +322,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
             </>
           ) : (
             <>
-              Ko'rish
+              Reklama ko'rish
               <ChevronRight className="w-4 h-4" />
             </>
           )}
