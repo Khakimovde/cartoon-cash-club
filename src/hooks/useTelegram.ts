@@ -22,13 +22,6 @@ export interface UserData {
   referral_earnings: number;
 }
 
-const DEV_USER: TelegramUser = {
-  id: 5326022510,
-  username: "admin_user",
-  first_name: "Admin",
-  last_name: "Test",
-};
-
 export function useTelegram() {
   const [user, setUser] = useState<UserData | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -36,28 +29,36 @@ export function useTelegram() {
   const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
   const [subscribedChannels, setSubscribedChannels] = useState<string[]>([]);
   const [adsToday, setAdsToday] = useState(0);
+  const [todayReferrals, setTodayReferrals] = useState(0);
+  const [dailyReferralClaimed, setDailyReferralClaimed] = useState(false);
+  const [isTelegram, setIsTelegram] = useState(false);
 
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     const tgUser = tg?.initDataUnsafe?.user;
 
-    const userData: TelegramUser = tgUser
-      ? {
-          id: tgUser.id,
-          username: tgUser.username,
-          first_name: tgUser.first_name,
-          last_name: tgUser.last_name,
-          photo_url: tgUser.photo_url,
-        }
-      : DEV_USER;
+    // Only allow Telegram WebApp access
+    if (!tgUser) {
+      setIsTelegram(false);
+      setLoading(false);
+      return;
+    }
+
+    setIsTelegram(true);
+
+    const userData: TelegramUser = {
+      id: tgUser.id,
+      username: tgUser.username,
+      first_name: tgUser.first_name,
+      last_name: tgUser.last_name,
+      photo_url: tgUser.photo_url,
+    };
 
     setTelegramUser(userData);
 
     // Expand Telegram WebApp
-    if (tg) {
-      tg.expand();
-      tg.ready();
-    }
+    tg.expand();
+    tg.ready();
 
     // Get ref code from Telegram start_param or URL query parameter (fallback for inline button)
     const startParam = tg?.initDataUnsafe?.start_param 
@@ -85,6 +86,8 @@ export function useTelegram() {
       setIsAdmin(data.isAdmin);
       setSubscribedChannels(data.subscribedChannels || []);
       setAdsToday(data.adsToday || 0);
+      setTodayReferrals(data.todayReferrals || 0);
+      setDailyReferralClaimed(data.dailyReferralClaimed || false);
     } catch (err) {
       console.error("Auth error:", err);
     } finally {
@@ -111,6 +114,8 @@ export function useTelegram() {
       setIsAdmin(data.isAdmin);
       setSubscribedChannels(data.subscribedChannels || []);
       setAdsToday(data.adsToday || 0);
+      setTodayReferrals(data.todayReferrals || 0);
+      setDailyReferralClaimed(data.dailyReferralClaimed || false);
     } catch (err) {
       console.error("Refresh error:", err);
     }
@@ -158,6 +163,9 @@ export function useTelegram() {
     telegramUser,
     subscribedChannels,
     adsToday,
+    todayReferrals,
+    dailyReferralClaimed,
+    isTelegram,
     refreshUser,
     invokeAction,
     invokeAdmin,

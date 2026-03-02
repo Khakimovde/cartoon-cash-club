@@ -6,7 +6,6 @@ const corsHeaders = {
 }
 
 // Get start of current 6-hour window in Tashkent time (UTC+5)
-// Windows: 00:00, 06:00, 12:00, 18:00 Tashkent
 function getSixHourBoundary(): string {
   const now = new Date()
   const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000
@@ -15,31 +14,32 @@ function getSixHourBoundary(): string {
   const windowStart = Math.floor(hour / 6) * 6
   const boundary = new Date(tashkentTime)
   boundary.setUTCHours(windowStart, 0, 0, 0)
-  // Convert back to UTC
   const utcBoundary = new Date(boundary.getTime() - TASHKENT_OFFSET_MS)
   return utcBoundary.toISOString()
+}
+
+// Get start of today in Tashkent time (UTC+5)
+function getTashkentDayStart(): string {
+  const now = new Date()
+  const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000
+  const tashkentTime = new Date(now.getTime() + TASHKENT_OFFSET_MS)
+  const dayStart = new Date(tashkentTime)
+  dayStart.setUTCHours(0, 0, 0, 0)
+  const utcDayStart = new Date(dayStart.getTime() - TASHKENT_OFFSET_MS)
+  return utcDayStart.toISOString()
 }
 
 // Send Telegram bot message to a user
 async function sendTelegramMessage(chatId: number, text: string) {
   const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
-  if (!botToken) {
-    console.error('[Telegram] Bot token not configured, cannot send message')
-    return
-  }
+  if (!botToken) return
 
   try {
-    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'HTML',
-      }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
     })
-    const result = await response.json()
-    console.log('[Telegram] Send message result:', JSON.stringify(result))
   } catch (e) {
     console.error('[Telegram] Failed to send message:', e)
   }
@@ -56,25 +56,14 @@ function getReferralBonusPercent(referralCount: number): number {
 
 // Process referral: record relationship, update counts, send notification
 async function processReferral(supabase: any, refCode: string, newUserTelegramId: number, newUserName: string) {
-  console.log(`[Referral] Processing ref_code: ${refCode} for user ${newUserTelegramId}`)
-
   const { data: referrer } = await supabase
     .from('users')
     .select('telegram_id, referral_count, first_name, username')
     .eq('referral_code', refCode)
     .maybeSingle()
 
-  if (!referrer) {
-    console.log(`[Referral] Referrer not found for code: ${refCode}`)
-    return false
-  }
+  if (!referrer || referrer.telegram_id === newUserTelegramId) return false
 
-  if (referrer.telegram_id === newUserTelegramId) {
-    console.log(`[Referral] User tried to refer themselves`)
-    return false
-  }
-
-  // Check if referral already exists
   const { data: existingRef } = await supabase
     .from('referrals')
     .select('id')
@@ -82,40 +71,26 @@ async function processReferral(supabase: any, refCode: string, newUserTelegramId
     .eq('referred_telegram_id', newUserTelegramId)
     .maybeSingle()
 
-  if (existingRef) {
-    console.log(`[Referral] Referral already exists`)
-    return false
-  }
+  if (existingRef) return false
 
-  // Record referral relationship
   const { error: refError } = await supabase.from('referrals').insert({
     referrer_telegram_id: referrer.telegram_id,
     referred_telegram_id: newUserTelegramId,
     bonus_coins: 0,
   })
 
-  if (refError) {
-    console.error(`[Referral] Failed to insert referral:`, refError.message)
-    return false
-  }
+  if (refError) return false
 
-  // Set referred_by on new user
   await supabase.from('users')
     .update({ referred_by: referrer.telegram_id })
     .eq('telegram_id', newUserTelegramId)
 
-  // Increment referrer's referral_count
   const newCount = (referrer.referral_count || 0) + 1
   await supabase.from('users')
     .update({ referral_count: newCount })
     .eq('telegram_id', referrer.telegram_id)
 
-  console.log(`[Referral] Success! Referrer ${referrer.telegram_id} now has ${newCount} referrals`)
-
-  // Calculate bonus percent for notification
   const bonusPercent = getReferralBonusPercent(newCount)
-
-  // Send Telegram notification to referrer
   const referredName = newUserName || `ID: ${newUserTelegramId}`
   const notificationText = `🎉 <b>Yangi referal!</b>\n\n` +
     `👤 <b>${referredName}</b> sizning referalingiz bo'ldi!\n\n` +
@@ -155,9 +130,7 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!user) {
-      // Create new user
       const referralCode = `ref_${telegram_id}_${Date.now().toString(36)}`
-
       const { data: newUser, error: createError } = await supabase
         .from('users')
         .insert({
@@ -177,13 +150,10 @@ Deno.serve(async (req) => {
       if (createError) throw new Error(`Create user failed: ${createError.message}`)
       user = newUser
 
-      // Handle referral for new user
       if (ref_code) {
-        const userName = first_name || username || ''
-        await processReferral(supabase, ref_code, telegram_id, userName)
+        await processReferral(supabase, ref_code, telegram_id, first_name || username || '')
       }
 
-      // Re-fetch user to get updated data (including referred_by)
       const { data: freshUser } = await supabase
         .from('users')
         .select('*')
@@ -191,7 +161,6 @@ Deno.serve(async (req) => {
         .single()
       if (freshUser) user = freshUser
     } else {
-      // Update existing user's info
       await supabase.from('users')
         .update({
           username: username || user.username,
@@ -201,11 +170,8 @@ Deno.serve(async (req) => {
         })
         .eq('telegram_id', telegram_id)
 
-      // Handle referral for EXISTING users who don't have a referrer yet
       if (ref_code && !user.referred_by) {
-        console.log(`[Referral] Processing referral for existing user ${telegram_id}`)
-        const userName = first_name || username || user.first_name || user.username || ''
-        await processReferral(supabase, ref_code, telegram_id, userName)
+        await processReferral(supabase, ref_code, telegram_id, first_name || username || user.first_name || user.username || '')
       }
 
       const { data: updatedUser } = await supabase
@@ -222,7 +188,6 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('referrer_telegram_id', telegram_id)
 
-    // Only increase referral_count, never decrease (admin may have set a higher value manually)
     const actualCount = referralCount || 0
     const currentCount = user.referral_count || 0
     if (actualCount > currentCount) {
@@ -238,13 +203,30 @@ Deno.serve(async (req) => {
       .select('channel_task_id')
       .eq('user_telegram_id', telegram_id)
 
-    // Get ad count for current 6-hour window (00:00, 06:00, 12:00, 18:00)
+    // Get ad count for current 6-hour window
     const windowStart = getSixHourBoundary()
     const { count: adsInWindow } = await supabase
       .from('ad_views')
       .select('*', { count: 'exact', head: true })
       .eq('user_telegram_id', telegram_id)
       .gte('viewed_at', windowStart)
+
+    // Count today's referrals (Tashkent time)
+    const dayStart = getTashkentDayStart()
+    const { count: todayRefs } = await supabase
+      .from('referrals')
+      .select('*', { count: 'exact', head: true })
+      .eq('referrer_telegram_id', telegram_id)
+      .gte('created_at', dayStart)
+
+    // Check if daily referral reward already claimed
+    const { data: dailyClaimed } = await supabase
+      .from('promo_history')
+      .select('id')
+      .eq('user_telegram_id', telegram_id)
+      .eq('code', 'DAILY_REFERRAL')
+      .gte('redeemed_at', dayStart)
+      .maybeSingle()
 
     // Check admin
     const { data: adminCheck } = await supabase
@@ -261,6 +243,8 @@ Deno.serve(async (req) => {
       isAdmin: !!adminCheck,
       subscribedChannels: subscriptions?.map(s => s.channel_task_id) || [],
       adsToday: adsInWindow || 0,
+      todayReferrals: todayRefs || 0,
+      dailyReferralClaimed: !!dailyClaimed,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

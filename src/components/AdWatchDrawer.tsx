@@ -1,7 +1,9 @@
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ChevronRight, Clock, CheckCircle2 } from "lucide-react";
 import coinImg from "@/assets/coin-3d.png";
 import videoAdIcon from "@/assets/video-ad-icon.png";
+import { openDirectLink } from "@/lib/monetag";
 
 interface AdWatchDrawerProps {
   isOpen: boolean;
@@ -14,6 +16,8 @@ interface AdWatchDrawerProps {
   isWatching: boolean;
 }
 
+const AD_VIEW_SECONDS = 7;
+
 const AdWatchDrawer = ({
   isOpen,
   onClose,
@@ -24,6 +28,9 @@ const AdWatchDrawer = ({
   onWatchAd,
   isWatching,
 }: AdWatchDrawerProps) => {
+  const [countdown, setCountdown] = useState(0);
+  const [waitingForReturn, setWaitingForReturn] = useState(false);
+
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -35,10 +42,34 @@ const AdWatchDrawer = ({
   const isMaxReached = watchedAds >= maxAds;
   const progress = maxAds > 0 ? (watchedAds / maxAds) * 100 : 0;
 
-  const handleWatchClick = async () => {
-    if (isMaxReached || isWatching || isOnCooldown) return;
-    await onWatchAd();
-  };
+  // Countdown timer
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Auto-confirm when countdown ends
+          setWaitingForReturn(false);
+          onWatchAd();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown, onWatchAd]);
+
+  const handleWatchClick = useCallback(() => {
+    if (isMaxReached || isWatching || isOnCooldown || waitingForReturn) return;
+    // Open direct link
+    openDirectLink();
+    // Start countdown
+    setWaitingForReturn(true);
+    setCountdown(AD_VIEW_SECONDS);
+  }, [isMaxReached, isWatching, isOnCooldown, waitingForReturn]);
+
+  const isProcessing = waitingForReturn || isWatching;
 
   return (
     <AnimatePresence>
@@ -119,6 +150,16 @@ const AdWatchDrawer = ({
                 </div>
               </div>
 
+              {/* Waiting indicator */}
+              {waitingForReturn && (
+                <div className="flex items-center justify-center gap-2 mb-3 py-3 px-3 rounded-lg bg-primary/10">
+                  <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-foreground">Kamida 5 soniya ko'rishingiz kerak</p>
+                  </div>
+                </div>
+              )}
+
               {/* Cooldown / limit info */}
               {isMaxReached && (
                 <div className="flex items-center justify-center gap-2 mb-3 py-2 px-3 rounded-lg bg-muted">
@@ -134,7 +175,7 @@ const AdWatchDrawer = ({
               {/* Watch button */}
               <button
                 onClick={handleWatchClick}
-                disabled={isMaxReached || isWatching || isOnCooldown}
+                disabled={isMaxReached || isProcessing || isOnCooldown}
                 className="w-full py-3 rounded-xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 active:scale-[0.98] disabled:active:scale-100"
                 style={{
                   background: isMaxReached || isOnCooldown
@@ -147,13 +188,13 @@ const AdWatchDrawer = ({
                     isMaxReached || isOnCooldown
                       ? "none"
                       : "0 4px 14px hsla(215, 90%, 55%, 0.3)",
-                  opacity: isWatching ? 0.7 : 1,
+                  opacity: isProcessing ? 0.7 : 1,
                 }}
               >
-                {isWatching ? (
+                {isProcessing ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Yuklanmoqda...
+                    Tasdiqlanmoqda...
                   </>
                 ) : isMaxReached ? (
                   <>

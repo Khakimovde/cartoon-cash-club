@@ -6,7 +6,6 @@ const corsHeaders = {
 }
 
 // Get start of current 6-hour window in Tashkent time (UTC+5)
-// Windows: 00:00, 06:00, 12:00, 18:00 Tashkent
 function getSixHourBoundary(): string {
   const now = new Date()
   const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000
@@ -15,9 +14,19 @@ function getSixHourBoundary(): string {
   const windowStart = Math.floor(hour / 6) * 6
   const boundary = new Date(tashkentTime)
   boundary.setUTCHours(windowStart, 0, 0, 0)
-  // Convert back to UTC
   const utcBoundary = new Date(boundary.getTime() - TASHKENT_OFFSET_MS)
   return utcBoundary.toISOString()
+}
+
+// Get start of today in Tashkent time (UTC+5)
+function getTashkentDayStart(): string {
+  const now = new Date()
+  const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000
+  const tashkentTime = new Date(now.getTime() + TASHKENT_OFFSET_MS)
+  const dayStart = new Date(tashkentTime)
+  dayStart.setUTCHours(0, 0, 0, 0)
+  const utcDayStart = new Date(dayStart.getTime() - TASHKENT_OFFSET_MS)
+  return utcDayStart.toISOString()
 }
 
 // Referral bonus percentages based on referral count
@@ -54,8 +63,6 @@ async function processReferralBonus(supabase: any, userId: number, coinsEarned: 
 
   if (bonusCoins <= 0) return
 
-  console.log(`[Referral] Giving ${bonusCoins} coins (${bonusPercent}%) to referrer ${referrer.telegram_id} from user ${userId} earning ${coinsEarned}`)
-
   await supabase.from('users')
     .update({
       coins: (referrer.coins || 0) + bonusCoins,
@@ -67,37 +74,17 @@ async function processReferralBonus(supabase: any, userId: number, coinsEarned: 
 // Check if user is member of a Telegram channel
 async function checkChannelMembership(userId: number, channelUsername: string): Promise<boolean> {
   const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
-  if (!botToken) {
-    console.error('[Telegram] Bot token not configured')
-    return false
-  }
+  if (!botToken) return false
 
   const cleanUsername = channelUsername.replace('@', '')
-
   try {
-    console.log(`[Telegram] Checking membership for user ${userId} in channel @${cleanUsername}`)
-
     const response = await fetch(
-      `https://api.telegram.org/bot${botToken}/getChatMember?chat_id=@${cleanUsername}&user_id=${userId}`,
-      { method: 'GET' }
+      `https://api.telegram.org/bot${botToken}/getChatMember?chat_id=@${cleanUsername}&user_id=${userId}`
     )
-
     const data = await response.json()
-    console.log('[Telegram] API response:', JSON.stringify(data))
-
-    if (!data.ok) {
-      console.error('[Telegram] API error:', data.description)
-      return false
-    }
-
-    const status = data.result?.status
-    const validStatuses = ['member', 'administrator', 'creator']
-    const isMember = validStatuses.includes(status)
-
-    console.log(`[Telegram] User status: ${status}, isMember: ${isMember}`)
-    return isMember
-  } catch (error) {
-    console.error('[Telegram] Error checking membership:', error)
+    if (!data.ok) return false
+    return ['member', 'administrator', 'creator'].includes(data.result?.status)
+  } catch {
     return false
   }
 }
@@ -144,7 +131,6 @@ Deno.serve(async (req) => {
         const adReward = parseInt(getSetting('ad_reward_coins') || '13')
         const maxAds = parseInt(getSetting('max_ads_per_session') || '10')
 
-        // Count ads in current 6-hour window (00:00, 06:00, 12:00, 18:00)
         const windowStart = getSixHourBoundary()
         const { count: windowAds } = await supabase
           .from('ad_views')
@@ -159,7 +145,6 @@ Deno.serve(async (req) => {
 
         const newAdsCount = (windowAds || 0) + 1
         const isLastAd = newAdsCount >= maxAds
-
         const coinsToAdd = isLastAd ? (adReward * maxAds) : 0
 
         await supabase.from('ad_views').insert({
@@ -171,8 +156,6 @@ Deno.serve(async (req) => {
           await supabase.from('users')
             .update({ coins: user.coins + coinsToAdd })
             .eq('telegram_id', telegram_id)
-
-          // Process referral bonus for the earned coins
           await processReferralBonus(supabase, telegram_id, coinsToAdd)
         }
 
@@ -183,6 +166,56 @@ Deno.serve(async (req) => {
           ads_today: newAdsCount,
           completed: isLastAd,
         }
+        break
+      }
+
+      case 'claim_daily_referral_reward': {
+        const DAILY_GOAL = 10
+        const DAILY_REWARD = 400
+        const dayStart = getTashkentDayStart()
+
+        // Count today's referrals
+        const { count: todayRefs } = await supabase
+          .from('referrals')
+          .select('*', { count: 'exact', head: true })
+          .eq('referrer_telegram_id', telegram_id)
+          .gte('created_at', dayStart)
+
+        if ((todayRefs || 0) < DAILY_GOAL) {
+          result = { success: false, error: `Bugun ${todayRefs || 0}/${DAILY_GOAL} ta referal. Yetarli emas!` }
+          break
+        }
+
+        // Check if already claimed today
+        const { data: alreadyClaimed } = await supabase
+          .from('promo_history')
+          .select('id')
+          .eq('user_telegram_id', telegram_id)
+          .eq('code', 'DAILY_REFERRAL')
+          .gte('redeemed_at', dayStart)
+          .maybeSingle()
+
+        if (alreadyClaimed) {
+          result = { success: false, error: 'Bugun allaqachon olingan!' }
+          break
+        }
+
+        // Award coins
+        await supabase.from('users')
+          .update({ coins: (user.coins || 0) + DAILY_REWARD })
+          .eq('telegram_id', telegram_id)
+
+        // Record in promo_history
+        await supabase.from('promo_history').insert({
+          user_telegram_id: telegram_id,
+          code: 'DAILY_REFERRAL',
+          coins_earned: DAILY_REWARD,
+          source: 'daily_referral',
+        })
+
+        await processReferralBonus(supabase, telegram_id, DAILY_REWARD)
+
+        result = { success: true, coins_earned: DAILY_REWARD }
         break
       }
 
@@ -237,7 +270,6 @@ Deno.serve(async (req) => {
           .update({ coins: user.coins + channelReward })
           .eq('telegram_id', telegram_id)
 
-        // Process referral bonus for channel subscription reward
         await processReferralBonus(supabase, telegram_id, channelReward)
 
         result = {
@@ -264,7 +296,6 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Validate card number - must be 16 digits
         if (!card_number || !/^\d{16}$/.test(String(card_number).replace(/\s/g, ''))) {
           result = { success: false, error: 'Karta raqami 16 ta raqamdan iborat bo\'lishi kerak' }
           break
@@ -289,7 +320,7 @@ Deno.serve(async (req) => {
       }
 
       case 'game_bet_deduct': {
-        const { game_id, bet_amount } = body
+        const { game_id } = body
         if (!game_id) {
           result = { success: false, error: 'Missing game_id' }
           break
@@ -313,7 +344,6 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Deduct bet immediately
         await supabase.from('users')
           .update({ coins: user.coins - actualBet })
           .eq('telegram_id', telegram_id)
@@ -329,7 +359,6 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Bet already deducted on start. Only award if won.
         const { data: gameSettings } = await supabase
           .from('game_settings')
           .select('*')
@@ -342,7 +371,6 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Re-fetch user to get current coins (bet was already deducted)
         const { data: freshUser } = await supabase
           .from('users')
           .select('coins')
@@ -357,7 +385,6 @@ Deno.serve(async (req) => {
             .update({ coins: currentCoins + reward })
             .eq('telegram_id', telegram_id)
 
-          // Referral bonus on net gain (reward - bet)
           const netGain = reward - gameSettings.bet_amount
           if (netGain > 0) {
             await processReferralBonus(supabase, telegram_id, netGain)
@@ -365,7 +392,6 @@ Deno.serve(async (req) => {
 
           result = { success: true, won: true, coins_change: reward }
         } else {
-          // Already lost the bet on deduct, nothing more to do
           result = { success: true, won: false, coins_change: 0 }
         }
         break
