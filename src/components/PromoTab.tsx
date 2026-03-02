@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Gift, Clock, Copy, CheckCircle2, Ticket, ChevronRight, History, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { showAd } from "@/lib/monetag";
+import { openDirectLink } from "@/lib/monetag";
 import coinImg from "@/assets/coin-3d.png";
 import videoAdIcon from "@/assets/video-ad-icon.png";
 import { toast } from "sonner";
@@ -22,6 +22,8 @@ function getNextBoundary(): number {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), nextHour, nextMinutes, 0, 0).getTime();
 }
 
+const AD_VIEW_SECONDS = 7;
+
 const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
   const [adsCount, setAdsCount] = useState(0);
   const [isWatching, setIsWatching] = useState(false);
@@ -34,6 +36,8 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [waitingForReturn, setWaitingForReturn] = useState(false);
   const maxAds = 10;
 
   useEffect(() => {
@@ -75,33 +79,44 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
     return () => clearInterval(interval);
   }, [cooldownEnd]);
 
-  const handleWatchAd = useCallback(async () => {
-    if (adsCount >= maxAds || isWatching || cooldownRemaining > 0) return;
-    setIsWatching(true);
-    try {
-      const adShown = await showAd();
-      if (adShown) {
-        const { data, error } = await supabase.functions.invoke("promo-action", {
-          body: { action: "watch_promo_ad", telegram_id: telegramId },
-        });
-        if (error) throw error;
-        if (data?.success) {
-          setAdsCount(data.ads_count);
-          if (data.completed && data.promo_code) {
-            toast.success("Promokod yaratildi! 🎉");
-            await fetchStatus();
-          } else {
-            toast.success(`Reklama ko'rildi! ${data.ads_count}/${maxAds}`);
-          }
-        } else if (data?.error) {
-          if (data.error === 'Limit tugadi') {
-            setCooldownEnd(getNextBoundary());
-            setAdsCount(maxAds);
-          }
-          toast.error(data.error);
+  // Countdown timer for ad viewing
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setWaitingForReturn(false);
+          // Auto-confirm ad view
+          confirmAdView();
+          return 0;
         }
-      } else {
-        toast.error("Reklama yuklanmadi");
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  const confirmAdView = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("promo-action", {
+        body: { action: "watch_promo_ad", telegram_id: telegramId },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        setAdsCount(data.ads_count);
+        if (data.completed && data.promo_code) {
+          toast.success("Promokod yaratildi! 🎉");
+          await fetchStatus();
+        } else {
+          toast.success(`Reklama ko'rildi! ${data.ads_count}/${maxAds}`);
+        }
+      } else if (data?.error) {
+        if (data.error === 'Limit tugadi') {
+          setCooldownEnd(getNextBoundary());
+          setAdsCount(maxAds);
+        }
+        toast.error(data.error);
       }
     } catch (err) {
       console.error("Promo ad error:", err);
@@ -109,7 +124,17 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
     } finally {
       setIsWatching(false);
     }
-  }, [adsCount, isWatching, cooldownRemaining, telegramId]);
+  };
+
+  const handleWatchAd = useCallback(() => {
+    if (adsCount >= maxAds || isWatching || cooldownRemaining > 0 || waitingForReturn) return;
+    setIsWatching(true);
+    // Open direct link
+    openDirectLink();
+    // Start countdown
+    setWaitingForReturn(true);
+    setCountdown(AD_VIEW_SECONDS);
+  }, [adsCount, isWatching, cooldownRemaining, waitingForReturn]);
 
   const handleRedeem = async () => {
     const code = promoInput.trim();
@@ -174,6 +199,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
   const progress = adsCount / maxAds;
   const isOnCooldown = cooldownRemaining > 0;
   const isMaxReached = adsCount >= maxAds;
+  const isProcessing = waitingForReturn || isWatching;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -281,6 +307,16 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
           </div>
         </div>
 
+        {/* Waiting indicator */}
+        {waitingForReturn && (
+          <div className="flex items-center justify-center gap-2 mb-3 py-3 px-3 rounded-lg bg-primary/10">
+            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <div className="text-center">
+              <p className="text-xs font-bold text-foreground">Kamida 5 soniya ko'rishingiz kerak</p>
+            </div>
+          </div>
+        )}
+
         {/* Cooldown info */}
         {isOnCooldown && (
           <div className="flex items-center justify-center gap-2 mb-3 py-2 px-3 rounded-lg bg-muted">
@@ -296,19 +332,19 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
         {/* Watch button */}
         <button
           onClick={handleWatchAd}
-          disabled={isMaxReached || isWatching || isOnCooldown}
+          disabled={isMaxReached || isProcessing || isOnCooldown}
           className="w-full py-3 rounded-xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 active:scale-[0.98] disabled:active:scale-100"
           style={{
             background: isMaxReached || isOnCooldown ? "hsl(var(--muted))" : "var(--gradient-primary)",
             color: isMaxReached || isOnCooldown ? "hsl(var(--muted-foreground))" : "hsl(var(--primary-foreground))",
             boxShadow: isMaxReached || isOnCooldown ? "none" : "0 4px 14px hsla(215, 90%, 55%, 0.3)",
-            opacity: isWatching ? 0.7 : 1,
+            opacity: isProcessing ? 0.7 : 1,
           }}
         >
-          {isWatching ? (
+          {isProcessing ? (
             <>
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Yuklanmoqda...
+              Tasdiqlanmoqda...
             </>
           ) : isMaxReached && !isOnCooldown ? (
             <>

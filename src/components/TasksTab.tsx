@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, ChevronRight, Clock, ListChecks } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock, ListChecks, Users, Share2, Gift } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { showAd } from "@/lib/monetag";
+import { openDirectLink } from "@/lib/monetag";
 import coinImg from "@/assets/coin-3d.png";
 import videoAdIcon from "@/assets/video-ad-icon.png";
 import megaphoneIcon from "@/assets/megaphone-icon.png";
+import referralFriendsIcon from "@/assets/referral-friends-icon.png";
 import AdWatchDrawer from "./AdWatchDrawer";
 import ChannelSubscribeDrawer from "./ChannelSubscribeDrawer";
 import { toast } from "sonner";
@@ -17,6 +18,9 @@ interface TasksTabProps {
   subscribedChannels: string[];
   invokeAction: (action: string, params?: Record<string, any>) => Promise<any>;
   refreshUser: () => Promise<void>;
+  todayReferrals: number;
+  dailyReferralClaimed: boolean;
+  referralCode: string;
 }
 
 interface ChannelTask {
@@ -31,7 +35,6 @@ interface ChannelTask {
 const getCooldownKey = (tgId: number) => `ad_cooldown_end_${tgId}`;
 
 // Calculate next 6-hour boundary in Tashkent time (UTC+5)
-// Windows: 00:00, 06:00, 12:00, 18:00 Tashkent
 const getNextSixHourBoundary = (): number => {
   const now = new Date();
   const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
@@ -45,9 +48,22 @@ const getNextSixHourBoundary = (): number => {
   } else {
     next.setUTCHours(nextWindow, 0, 0, 0);
   }
-  // Convert back to UTC timestamp
   return next.getTime() - TASHKENT_OFFSET_MS;
 };
+
+// Calculate next Tashkent midnight
+const getNextTashkentMidnight = (): number => {
+  const now = new Date();
+  const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
+  const tashkentTime = new Date(now.getTime() + TASHKENT_OFFSET_MS);
+  const next = new Date(tashkentTime);
+  next.setUTCDate(next.getUTCDate() + 1);
+  next.setUTCHours(0, 0, 0, 0);
+  return next.getTime() - TASHKENT_OFFSET_MS;
+};
+
+const DAILY_REFERRAL_GOAL = 10;
+const DAILY_REFERRAL_REWARD = 400;
 
 const TasksTab = ({
   coins,
@@ -56,43 +72,38 @@ const TasksTab = ({
   subscribedChannels,
   invokeAction,
   refreshUser,
+  todayReferrals,
+  dailyReferralClaimed,
+  referralCode,
 }: TasksTabProps) => {
   const [watchedAds, setWatchedAds] = useState(adsToday);
   const [isWatching, setIsWatching] = useState(false);
   const [channels, setChannels] = useState<ChannelTask[]>([]);
   const [maxAds, setMaxAds] = useState(10);
   const [adReward, setAdReward] = useState(13);
-  const [cooldownMinutes, setCooldownMinutes] = useState(30);
   const [localSubscribed, setLocalSubscribed] = useState<string[]>(subscribedChannels);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [isAdDrawerOpen, setIsAdDrawerOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<ChannelTask | null>(null);
+  const [resetTimer, setResetTimer] = useState(0);
+  const [isClaiming, setIsClaiming] = useState(false);
   const cooldownKey = getCooldownKey(telegramId);
 
-  useEffect(() => {
-    setWatchedAds(adsToday);
-  }, [adsToday]);
+  useEffect(() => { setWatchedAds(adsToday); }, [adsToday]);
+  useEffect(() => { setLocalSubscribed(subscribedChannels); }, [subscribedChannels]);
 
+  // Cooldown logic
   useEffect(() => {
-    setLocalSubscribed(subscribedChannels);
-  }, [subscribedChannels]);
-
-  // Cooldown logic: only show cooldown when server confirms ads are maxed
-  // Server's adsToday is the source of truth (synced via refreshUser)
-  useEffect(() => {
-    // If server says ads are not maxed, clear any stale cooldown
     if (watchedAds < maxAds || maxAds <= 0) {
       localStorage.removeItem(cooldownKey);
       setCooldownRemaining(0);
       return;
     }
 
-    // Ads are maxed - set cooldown to next 6-hour boundary if not already set
     let endTime: number;
     const stored = localStorage.getItem(cooldownKey);
     if (stored) {
       endTime = parseInt(stored, 10);
-      // If stored cooldown already expired, refresh
       if (endTime <= Date.now()) {
         localStorage.removeItem(cooldownKey);
         setCooldownRemaining(0);
@@ -123,6 +134,17 @@ const TasksTab = ({
     return () => clearInterval(interval);
   }, [cooldownKey, refreshUser, watchedAds, maxAds]);
 
+  // Daily referral reset timer
+  useEffect(() => {
+    const updateTimer = () => {
+      const midnight = getNextTashkentMidnight();
+      setResetTimer(Math.max(0, Math.ceil((midnight - Date.now()) / 1000)));
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Fetch channels and settings
   useEffect(() => {
     const fetchData = async () => {
@@ -136,13 +158,11 @@ const TasksTab = ({
         const get = (key: string) => settingsRes.data.find((s: any) => s.key === key)?.value;
         setMaxAds(parseInt(get("max_ads_per_session") || "10"));
         setAdReward(parseInt(get("ad_reward_coins") || "13"));
-        setCooldownMinutes(parseInt(get("cooldown_minutes") || "40"));
       }
     };
     fetchData();
   }, []);
 
-  // Start cooldown aligned to next 6-hour boundary (00, 06, 12, 18)
   const startCooldown = useCallback(() => {
     const endTime = getNextSixHourBoundary();
     localStorage.setItem(cooldownKey, endTime.toString());
@@ -154,22 +174,17 @@ const TasksTab = ({
     setIsWatching(true);
 
     try {
-      const adShown = await showAd();
-      if (adShown) {
-        const result = await invokeAction("watch_ad");
-        if (result?.success) {
-          const newAdsCount = result.ads_today;
-          setWatchedAds(newAdsCount);
-          toast.success(`Reklama ko'rildi! ${result.completed ? `+${result.coins_earned} tanga` : `${newAdsCount}/${maxAds}`}`);
-          if (result.completed) {
-            startCooldown();
-            await refreshUser();
-          }
-        } else if (result?.error) {
-          toast.error(result.error);
+      const result = await invokeAction("watch_ad");
+      if (result?.success) {
+        const newAdsCount = result.ads_today;
+        setWatchedAds(newAdsCount);
+        toast.success(`Reklama ko'rildi! ${result.completed ? `+${result.coins_earned} tanga` : `${newAdsCount}/${maxAds}`}`);
+        if (result.completed) {
+          startCooldown();
+          await refreshUser();
         }
-      } else {
-        toast.error("Reklama yuklanmadi, qayta urinib ko'ring");
+      } else if (result?.error) {
+        toast.error(result.error);
       }
     } catch (error) {
       console.error("Ad error:", error);
@@ -184,6 +199,34 @@ const TasksTab = ({
     refreshUser();
   };
 
+  const handleClaimReferralReward = async () => {
+    if (isClaiming || dailyReferralClaimed || todayReferrals < DAILY_REFERRAL_GOAL) return;
+    setIsClaiming(true);
+    try {
+      const result = await invokeAction("claim_daily_referral_reward");
+      if (result?.success) {
+        toast.success(`+${DAILY_REFERRAL_REWARD} tanga qo'shildi! 🎉`);
+        await refreshUser();
+      } else {
+        toast.error(result?.error || "Xatolik");
+      }
+    } catch (err) {
+      toast.error("Xatolik yuz berdi");
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  const handleShareReferral = () => {
+    const referralLink = `https://t.me/AdoraPay_robot?start=${referralCode}`;
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      tg.openTelegramLink(
+        `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent("Do'stingizni taklif qiling va tanga ishlang! 🎉")}`
+      );
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -195,6 +238,8 @@ const TasksTab = ({
   const progress = watchedAds / maxAds;
   const isOnCooldown = cooldownRemaining > 0;
   const isMaxReached = watchedAds >= maxAds;
+  const referralProgress = Math.min(todayReferrals, DAILY_REFERRAL_GOAL);
+  const referralGoalReached = todayReferrals >= DAILY_REFERRAL_GOAL;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -273,7 +318,69 @@ const TasksTab = ({
           </div>
         </motion.div>
 
-        {/* Channel Subscriptions - each card opens drawer */}
+        {/* Daily Referral Task Card */}
+        <motion.div variants={itemVariants} className="task-card">
+          <div className="task-card-icon task-card-icon-channel">
+            <img src={referralFriendsIcon} alt="Referal" className="w-10 h-10 object-contain" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-foreground">Kunlik referal</h3>
+            <p className="text-sm text-muted-foreground">
+              {referralProgress}/{DAILY_REFERRAL_GOAL} ta do'st chaqiring
+            </p>
+            <div className="flex items-center gap-1 mt-1">
+              <img src={coinImg} alt="coin" className="w-4 h-4" />
+              <span className="text-sm font-bold text-coin">{DAILY_REFERRAL_REWARD} Tanga</span>
+            </div>
+            <div className="progress-bar-3d mt-2">
+              <div className="fill" style={{ width: `${(referralProgress / DAILY_REFERRAL_GOAL) * 100}%` }} />
+            </div>
+            {/* Timer until daily reset */}
+            <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+              <Clock className="w-3.5 h-3.5 text-primary" />
+              <span>
+                Yangilanish: <span className="font-bold text-primary">{formatTime(resetTimer)}</span>
+              </span>
+            </div>
+          </div>
+          <div className="flex-shrink-0">
+            {dailyReferralClaimed ? (
+              <span className="flex items-center gap-1 text-sm font-bold text-success">
+                <CheckCircle2 className="w-4 h-4" />
+                Olingan
+              </span>
+            ) : referralGoalReached ? (
+              <button
+                onClick={handleClaimReferralReward}
+                disabled={isClaiming}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold"
+                style={{
+                  background: "var(--gradient-primary)",
+                  color: "hsl(var(--primary-foreground))",
+                }}
+              >
+                {isClaiming ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Gift className="w-3.5 h-3.5" />
+                    Olish
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={handleShareReferral}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-secondary text-foreground"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                Ulashish
+              </button>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Channel Subscriptions */}
         {channels.map((channel) => {
           const isCompleted = localSubscribed.includes(channel.id);
 

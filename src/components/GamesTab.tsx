@@ -4,7 +4,7 @@ import { Gamepad2, ArrowLeft, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import coinImg from "@/assets/coin-3d.png";
 import { toast } from "sonner";
-import { showAd } from "@/lib/monetag";
+import { openDirectLink } from "@/lib/monetag";
 
 // Game components
 import HangmanGame from "./games/HangmanGame";
@@ -130,11 +130,9 @@ const GamesTab = ({ coins, telegramId, invokeAction, refreshUser }: GamesTabProp
 
     // Show ad before game starts
     setShowingAd(true);
-    try {
-      await showAd();
-    } catch (e) {
-      // Ad failed, still allow game
-    }
+    openDirectLink();
+    // Wait 3 seconds for ad view
+    await new Promise(r => setTimeout(r, 3000));
     setShowingAd(false);
 
     setActiveGame(gameId);

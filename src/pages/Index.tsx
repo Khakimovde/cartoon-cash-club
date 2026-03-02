@@ -10,14 +10,45 @@ import { useTelegram } from "@/hooks/useTelegram";
 import coinImg from "@/assets/coin-3d.png";
 import { useState } from "react";
 
+const ADMIN_PASSWORD = "Azizbek335161606";
+
 const Index = () => {
   const {
-    user, isAdmin, loading, telegramUser,
-    subscribedChannels, adsToday,
+    user, isAdmin, loading, telegramUser, isTelegram,
+    subscribedChannels, adsToday, todayReferrals, dailyReferralClaimed,
     refreshUser, invokeAction, invokeAdmin,
   } = useTelegram();
 
   const [activeTab, setActiveTab] = useState<TabType>("tasks");
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [adminPasswordError, setAdminPasswordError] = useState(false);
+
+  // Not Telegram - show blocked screen
+  if (!loading && !isTelegram) {
+    return (
+      <div className="min-h-screen bg-background max-w-md mx-auto flex items-center justify-center px-6">
+        <div className="text-center space-y-4">
+          <div className="text-5xl">🔒</div>
+          <h1 className="text-xl font-extrabold text-foreground">Faqat Telegram orqali</h1>
+          <p className="text-sm text-muted-foreground">
+            Bu ilova faqat Telegram Mini App sifatida ishlaydi.
+            Iltimos, Telegram orqali oching.
+          </p>
+          <a
+            href="https://t.me/AdoraPay_robot"
+            className="inline-block px-6 py-3 rounded-xl text-sm font-bold"
+            style={{
+              background: "var(--gradient-primary)",
+              color: "hsl(var(--primary-foreground))",
+            }}
+          >
+            Telegram botni ochish
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -36,6 +67,24 @@ const Index = () => {
   const displayName = user?.first_name || user?.username || "Foydalanuvchi";
   const telegramId = user?.telegram_id || telegramUser?.id || 0;
 
+  // Admin tab requires password
+  const handleAdminTabChange = (tab: TabType) => {
+    if (tab === "admin" && !adminUnlocked) {
+      setActiveTab("admin");
+      return;
+    }
+    setActiveTab(tab);
+  };
+
+  const handleAdminLogin = () => {
+    if (adminPasswordInput === ADMIN_PASSWORD) {
+      setAdminUnlocked(true);
+      setAdminPasswordError(false);
+    } else {
+      setAdminPasswordError(true);
+    }
+  };
+
   const renderTab = () => {
     switch (activeTab) {
       case "tasks":
@@ -47,6 +96,9 @@ const Index = () => {
             subscribedChannels={subscribedChannels}
             invokeAction={invokeAction}
             refreshUser={refreshUser}
+            todayReferrals={todayReferrals}
+            dailyReferralClaimed={dailyReferralClaimed}
+            referralCode={user?.referral_code || ""}
           />
         );
       case "promo":
@@ -81,6 +133,41 @@ const Index = () => {
           />
         );
       case "admin":
+        if (!adminUnlocked) {
+          return (
+            <div className="px-4 pt-8 pb-6">
+              <div className="card-3d p-6 text-center space-y-4">
+                <div className="text-4xl">🔐</div>
+                <h2 className="text-lg font-extrabold text-foreground">Admin Panel</h2>
+                <p className="text-sm text-muted-foreground">Parolni kiriting</p>
+                <input
+                  type="password"
+                  value={adminPasswordInput}
+                  onChange={(e) => {
+                    setAdminPasswordInput(e.target.value);
+                    setAdminPasswordError(false);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
+                  placeholder="Parol"
+                  className="w-full px-4 py-3 rounded-xl bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none text-center font-bold"
+                />
+                {adminPasswordError && (
+                  <p className="text-xs text-destructive font-bold">Noto'g'ri parol!</p>
+                )}
+                <button
+                  onClick={handleAdminLogin}
+                  className="w-full py-3 rounded-xl text-sm font-bold"
+                  style={{
+                    background: "var(--gradient-primary)",
+                    color: "hsl(var(--primary-foreground))",
+                  }}
+                >
+                  Kirish
+                </button>
+              </div>
+            </div>
+          );
+        }
         return <AdminPanel invokeAdmin={invokeAdmin} refreshUser={refreshUser} />;
     }
   };
@@ -127,7 +214,7 @@ const Index = () => {
       </main>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} />
+      <BottomNav activeTab={activeTab} onTabChange={handleAdminTabChange} isAdmin={isAdmin} />
     </div>
   );
 };
