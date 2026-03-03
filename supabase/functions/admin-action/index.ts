@@ -478,6 +478,61 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'toggle_bonus_day': {
+        const { active } = body
+        await supabase.from('app_settings')
+          .update({ value: active ? 'true' : 'false', updated_at: new Date().toISOString() })
+          .eq('key', 'bonus_day_active')
+        result = { success: true }
+        break
+      }
+
+      case 'convert_bonus_coins': {
+        const { target_telegram_id, amount } = body
+        if (!target_telegram_id || !amount) {
+          result = { success: false, error: 'target_telegram_id and amount required' }
+          break
+        }
+
+        const parsedAmt = parseInt(amount)
+        if (isNaN(parsedAmt) || parsedAmt <= 0) {
+          result = { success: false, error: 'Invalid amount' }
+          break
+        }
+
+        const { data: targetUser } = await supabase
+          .from('users')
+          .select('coins, bonus_coins')
+          .eq('telegram_id', target_telegram_id)
+          .maybeSingle()
+
+        if (!targetUser) {
+          result = { success: false, error: 'User not found' }
+          break
+        }
+
+        if ((targetUser.bonus_coins || 0) < parsedAmt) {
+          result = { success: false, error: 'Bonus tanga yetarli emas' }
+          break
+        }
+
+        await supabase.from('users')
+          .update({
+            coins: (targetUser.coins || 0) + parsedAmt,
+            bonus_coins: (targetUser.bonus_coins || 0) - parsedAmt,
+          })
+          .eq('telegram_id', target_telegram_id)
+
+        const { data: updatedUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('telegram_id', target_telegram_id)
+          .maybeSingle()
+
+        result = { success: true, user: updatedUser }
+        break
+      }
+
       default:
         result = { success: false, error: 'Unknown action' }
     }

@@ -6,6 +6,7 @@ import ReferralTab from "@/components/ReferralTab";
 import LeaderboardTab from "@/components/LeaderboardTab";
 import ProfileTab from "@/components/ProfileTab";
 import AdminPanel from "@/components/AdminPanel";
+import BonusDayTab from "@/components/BonusDayTab";
 import { useTelegram } from "@/hooks/useTelegram";
 import coinImg from "@/assets/coin-3d.png";
 import { useState } from "react";
@@ -16,6 +17,7 @@ const Index = () => {
   const {
     user, isAdmin, loading, telegramUser, isTelegram,
     subscribedChannels, adsToday, todayReferrals, dailyReferralClaimed,
+    bonusDayActive,
     refreshUser, invokeAction, invokeAdmin,
   } = useTelegram();
 
@@ -62,6 +64,7 @@ const Index = () => {
   }
 
   const coins = user?.coins || 0;
+  const bonusCoins = user?.bonus_coins || 0;
   const referralCount = user?.referral_count || 0;
   const referralEarnings = user?.referral_earnings || 0;
   const displayName = user?.first_name || user?.username || "Foydalanuvchi";
@@ -99,6 +102,14 @@ const Index = () => {
             todayReferrals={todayReferrals}
             dailyReferralClaimed={dailyReferralClaimed}
             referralCode={user?.referral_code || ""}
+          />
+        );
+      case "bonusday":
+        return (
+          <BonusDayTab
+            bonusCoins={bonusCoins}
+            invokeAction={invokeAction}
+            refreshUser={refreshUser}
           />
         );
       case "promo":
@@ -192,9 +203,17 @@ const Index = () => {
             <p className="text-xs text-muted-foreground">ID: {telegramId}</p>
           </div>
         </div>
-        <div className="coin-badge">
-          <img src={coinImg} alt="coin" className="w-5 h-5" />
-          <span>{coins.toLocaleString()}</span>
+        <div className="flex items-center gap-2">
+          {bonusDayActive && bonusCoins > 0 && (
+            <div className="coin-badge" style={{ background: "hsla(40, 90%, 50%, 0.15)" }}>
+              <span className="text-xs">⭐</span>
+              <span style={{ color: "hsl(40, 90%, 45%)" }}>{bonusCoins.toLocaleString()}</span>
+            </div>
+          )}
+          <div className="coin-badge">
+            <img src={coinImg} alt="coin" className="w-5 h-5" />
+            <span>{coins.toLocaleString()}</span>
+          </div>
         </div>
       </header>
 
@@ -214,7 +233,7 @@ const Index = () => {
       </main>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={handleAdminTabChange} isAdmin={isAdmin} />
+      <BottomNav activeTab={activeTab} onTabChange={handleAdminTabChange} isAdmin={isAdmin} bonusDayActive={bonusDayActive} />
     </div>
   );
 };

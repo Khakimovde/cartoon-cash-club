@@ -1,17 +1,19 @@
 import { motion } from "framer-motion";
-import { ListChecks, Users, Trophy, User, Settings, Gift } from "lucide-react";
+import { ListChecks, Users, Trophy, User, Settings, Gift, Sparkles } from "lucide-react";
 
-export type TabType = "tasks" | "promo" | "referral" | "leaderboard" | "profile" | "admin";
+export type TabType = "tasks" | "bonusday" | "promo" | "referral" | "leaderboard" | "profile" | "admin";
 
 interface BottomNavProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   isAdmin?: boolean;
+  bonusDayActive?: boolean;
 }
 
-const BottomNav = ({ activeTab, onTabChange, isAdmin }: BottomNavProps) => {
+const BottomNav = ({ activeTab, onTabChange, isAdmin, bonusDayActive }: BottomNavProps) => {
   const tabs: { id: TabType; label: string; icon: typeof ListChecks }[] = [
     { id: "tasks", label: "Vazifalar", icon: ListChecks },
+    ...(bonusDayActive ? [{ id: "bonusday" as TabType, label: "Bonus", icon: Sparkles }] : []),
     { id: "promo", label: "Promo", icon: Gift },
     { id: "referral", label: "Referal", icon: Users },
     { id: "leaderboard", label: "Top", icon: Trophy },
