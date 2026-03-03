@@ -110,9 +110,9 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
 
       {/* Waiting indicator */}
       {waitingForReturn && (
-        <div className="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-primary/10">
-          <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-          <p className="text-xs font-bold text-foreground">Kamida 5 soniya ko'rishingiz kerak</p>
+        <div className="flex items-center gap-2 py-3 px-3 rounded-xl bg-yellow-500/15 border border-yellow-500/30">
+          <span className="text-lg">⚠️</span>
+          <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">Kamida 5 soniya ko'rishingiz kerak</p>
         </div>
       )}
 
