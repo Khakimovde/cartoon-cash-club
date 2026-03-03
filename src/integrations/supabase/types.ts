@@ -338,6 +338,7 @@ export type Database = {
       }
       users: {
         Row: {
+          bonus_coins: number
           coins: number | null
           created_at: string | null
           first_name: string | null
@@ -353,6 +354,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          bonus_coins?: number
           coins?: number | null
           created_at?: string | null
           first_name?: string | null
@@ -368,6 +370,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          bonus_coins?: number
           coins?: number | null
           created_at?: string | null
           first_name?: string | null

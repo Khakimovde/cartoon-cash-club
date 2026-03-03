@@ -235,6 +235,15 @@ Deno.serve(async (req) => {
       .eq('telegram_id', telegram_id)
       .maybeSingle()
 
+    // Check if bonus day is active
+    const { data: bonusDaySetting } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'bonus_day_active')
+      .maybeSingle()
+
+    const bonusDayActive = bonusDaySetting?.value === 'true'
+
     return new Response(JSON.stringify({
       user: {
         ...user,
@@ -245,6 +254,7 @@ Deno.serve(async (req) => {
       adsToday: adsInWindow || 0,
       todayReferrals: todayRefs || 0,
       dailyReferralClaimed: !!dailyClaimed,
+      bonusDayActive,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

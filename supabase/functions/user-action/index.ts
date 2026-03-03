@@ -397,6 +397,30 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'watch_bonus_ad': {
+        // Check if bonus day is active
+        const { data: bonusSetting } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'bonus_day_active')
+          .maybeSingle()
+
+        if (bonusSetting?.value !== 'true') {
+          result = { success: false, error: 'Bonus day faol emas' }
+          break
+        }
+
+        const bonusReward = 2
+        const newBonusCoins = (user.bonus_coins || 0) + bonusReward
+
+        await supabase.from('users')
+          .update({ bonus_coins: newBonusCoins })
+          .eq('telegram_id', telegram_id)
+
+        result = { success: true, bonus_coins: newBonusCoins, coins_earned: bonusReward }
+        break
+      }
+
       default:
         result = { success: false, error: 'Unknown action' }
     }

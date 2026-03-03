@@ -14,7 +14,7 @@ interface AdminPanelProps {
   refreshUser: () => Promise<void>;
 }
 
-type Section = "stats" | "withdrawals" | "channels" | "settings" | "users" | "games" | "promo";
+type Section = "stats" | "withdrawals" | "channels" | "settings" | "users" | "games" | "promo" | "bonusday";
 
 const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
   const [section, setSection] = useState<Section>("stats");
@@ -26,6 +26,7 @@ const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
     { id: "channels", label: "Kanallar", icon: Hash },
     { id: "games", label: "O'yinlar", icon: Gamepad2 },
     { id: "promo", label: "Promokod", icon: Gift },
+    { id: "bonusday", label: "Bonus Day", icon: Coins },
     { id: "settings", label: "Sozlamalar", icon: Settings },
   ];
 
@@ -71,6 +72,7 @@ const AdminPanel = ({ invokeAdmin, refreshUser }: AdminPanelProps) => {
       {section === "channels" && <ChannelsSection invokeAdmin={invokeAdmin} />}
       {section === "games" && <GamesAdminSection invokeAdmin={invokeAdmin} />}
       {section === "promo" && <PromoAdminSection invokeAdmin={invokeAdmin} />}
+      {section === "bonusday" && <BonusDayAdminSection invokeAdmin={invokeAdmin} />}
       {section === "settings" && <SettingsSection invokeAdmin={invokeAdmin} />}
     </motion.div>
   );
@@ -1090,6 +1092,165 @@ const PromoAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invo
           );
         })
       )}
+    </div>
+  );
+};
+
+// ─── Bonus Day Admin ──────────────────────────────
+const BonusDayAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["invokeAdmin"] }) => {
+  const [bonusDayActive, setBonusDayActive] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState(false);
+  const [searchId, setSearchId] = useState("");
+  const [foundUser, setFoundUser] = useState<any>(null);
+  const [searching, setSearching] = useState(false);
+  const [convertAmount, setConvertAmount] = useState("");
+  const [converting, setConverting] = useState(false);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "bonus_day_active")
+        .maybeSingle();
+      setBonusDayActive(data?.value === "true");
+      setLoading(false);
+    };
+    fetchStatus();
+  }, []);
+
+  const handleToggle = async () => {
+    setToggling(true);
+    const newState = !bonusDayActive;
+    await invokeAdmin("toggle_bonus_day", { active: newState });
+    setBonusDayActive(newState);
+    setToggling(false);
+    toast.success(newState ? "Bonus Day yoqildi!" : "Bonus Day o'chirildi!");
+  };
+
+  const handleSearch = async () => {
+    const id = parseInt(searchId.trim());
+    if (!id || isNaN(id)) {
+      toast.error("Telegram ID kiriting");
+      return;
+    }
+    setSearching(true);
+    setFoundUser(null);
+    const result = await invokeAdmin("find_user", { target_telegram_id: id });
+    if (result?.user) {
+      setFoundUser(result.user);
+    } else {
+      toast.error("Foydalanuvchi topilmadi");
+    }
+    setSearching(false);
+  };
+
+  const handleConvert = async () => {
+    if (!foundUser || !convertAmount.trim()) return;
+    const amount = parseInt(convertAmount);
+    if (!amount || amount <= 0) {
+      toast.error("Miqdor kiriting");
+      return;
+    }
+    setConverting(true);
+    const result = await invokeAdmin("convert_bonus_coins", {
+      target_telegram_id: foundUser.telegram_id,
+      amount,
+    });
+    if (result?.success) {
+      toast.success(`${amount} bonus tanga → asosiy tangaga o'zgartirildi!`);
+      setFoundUser(result.user);
+      setConvertAmount("");
+    } else {
+      toast.error(result?.error || "Xatolik");
+    }
+    setConverting(false);
+  };
+
+  if (loading) return <div className="text-center text-sm text-muted-foreground py-8">Yuklanmoqda...</div>;
+
+  return (
+    <div className="space-y-3">
+      <span className="font-bold text-sm">Bonus Day boshqaruvi</span>
+
+      {/* Toggle */}
+      <div className="card-3d p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-bold text-sm text-foreground">Bonus Day holati</p>
+            <p className="text-xs text-muted-foreground">
+              {bonusDayActive ? "Yoqilgan — foydalanuvchilarga ko'rinadi" : "O'chirilgan — yashirin"}
+            </p>
+          </div>
+          <button
+            onClick={handleToggle}
+            disabled={toggling}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+              bonusDayActive
+                ? "bg-green-500/15 text-green-500"
+                : "bg-red-500/15 text-red-500"
+            }`}
+          >
+            {toggling ? "..." : bonusDayActive ? "Yoqilgan ✓" : "O'chirilgan ✗"}
+          </button>
+        </div>
+      </div>
+
+      {/* Convert bonus coins */}
+      <div className="card-3d p-3 space-y-2">
+        <p className="text-xs text-muted-foreground font-bold">Bonus tangani asosiy tangaga o'zgartirish</p>
+        <div className="flex gap-2">
+          <input
+            value={searchId}
+            onChange={(e) => setSearchId(e.target.value)}
+            placeholder="Telegram ID"
+            type="number"
+            className="flex-1 px-3 py-2 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none"
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          />
+          <button
+            onClick={handleSearch}
+            disabled={searching || !searchId.trim()}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-bold disabled:opacity-50"
+          >
+            {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {foundUser && (
+          <div className="space-y-2 p-3 rounded-lg bg-secondary">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-foreground">
+                {foundUser.first_name || foundUser.username || "Noma'lum"}
+              </span>
+              <span className="text-xs text-muted-foreground">ID: {foundUser.telegram_id}</span>
+            </div>
+            <div className="flex gap-3 text-xs">
+              <span>💰 Asosiy: <span className="font-bold text-foreground">{(foundUser.coins || 0).toLocaleString()}</span></span>
+              <span>⭐ Bonus: <span className="font-bold text-foreground">{(foundUser.bonus_coins || 0).toLocaleString()}</span></span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={convertAmount}
+                onChange={(e) => setConvertAmount(e.target.value)}
+                placeholder="Miqdor"
+                type="number"
+                className="flex-1 px-3 py-2 rounded-lg bg-background text-sm text-foreground placeholder:text-muted-foreground outline-none"
+              />
+              <button
+                onClick={handleConvert}
+                disabled={converting || !convertAmount.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50"
+                style={{ background: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
+              >
+                {converting ? "..." : "O'zgartirish"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

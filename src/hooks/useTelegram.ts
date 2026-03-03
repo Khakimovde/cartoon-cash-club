@@ -16,6 +16,7 @@ export interface UserData {
   last_name: string | null;
   photo_url: string | null;
   coins: number;
+  bonus_coins: number;
   referral_code: string;
   referral_count: number;
   referred_by: number | null;
@@ -32,6 +33,7 @@ export function useTelegram() {
   const [todayReferrals, setTodayReferrals] = useState(0);
   const [dailyReferralClaimed, setDailyReferralClaimed] = useState(false);
   const [isTelegram, setIsTelegram] = useState(false);
+  const [bonusDayActive, setBonusDayActive] = useState(false);
 
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
@@ -88,6 +90,7 @@ export function useTelegram() {
       setAdsToday(data.adsToday || 0);
       setTodayReferrals(data.todayReferrals || 0);
       setDailyReferralClaimed(data.dailyReferralClaimed || false);
+      setBonusDayActive(data.bonusDayActive || false);
     } catch (err) {
       console.error("Auth error:", err);
     } finally {
@@ -116,6 +119,7 @@ export function useTelegram() {
       setAdsToday(data.adsToday || 0);
       setTodayReferrals(data.todayReferrals || 0);
       setDailyReferralClaimed(data.dailyReferralClaimed || false);
+      setBonusDayActive(data.bonusDayActive || false);
     } catch (err) {
       console.error("Refresh error:", err);
     }
@@ -166,6 +170,7 @@ export function useTelegram() {
     todayReferrals,
     dailyReferralClaimed,
     isTelegram,
+    bonusDayActive,
     refreshUser,
     invokeAction,
     invokeAdmin,
