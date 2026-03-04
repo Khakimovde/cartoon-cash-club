@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, ChevronRight } from "lucide-react";
 import coinImg from "@/assets/coin-3d.png";
-import { openDirectLink } from "@/lib/monetag";
+import { openDirectLink, markAdOpened } from "@/lib/monetag";
 
 interface BonusDayTabProps {
   bonusCoins: number;
@@ -18,20 +18,19 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
   const [waitingForReturn, setWaitingForReturn] = useState(false);
   const [isWatching, setIsWatching] = useState(false);
   const [localBonusCoins, setLocalBonusCoins] = useState(bonusCoins);
+  const adOpenTimeRef = useRef<number>(0);
 
   useEffect(() => {
     setLocalBonusCoins(bonusCoins);
   }, [bonusCoins]);
 
-  // Countdown timer
+  // Countdown timer - visual only
   useEffect(() => {
     if (countdown <= 0) return;
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          setWaitingForReturn(false);
-          handleAdComplete();
           return 0;
         }
         return prev - 1;
@@ -40,7 +39,7 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
     return () => clearInterval(timer);
   }, [countdown]);
 
-  const handleAdComplete = async () => {
+  const handleAdComplete = useCallback(async () => {
     setIsWatching(true);
     const result = await invokeAction("watch_bonus_ad");
     if (result?.success) {
@@ -48,10 +47,42 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
     }
     await refreshUser();
     setIsWatching(false);
-  };
+  }, [invokeAction, refreshUser, localBonusCoins]);
+
+  // Listen for user returning to app
+  useEffect(() => {
+    if (!waitingForReturn) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && waitingForReturn) {
+        const elapsed = Math.floor((Date.now() - adOpenTimeRef.current) / 1000);
+        if (elapsed >= AD_VIEW_SECONDS) {
+          setWaitingForReturn(false);
+          setCountdown(0);
+          handleAdComplete();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [waitingForReturn, handleAdComplete]);
+
+  // Check when countdown reaches 0
+  useEffect(() => {
+    if (countdown === 0 && waitingForReturn) {
+      const elapsed = Math.floor((Date.now() - adOpenTimeRef.current) / 1000);
+      if (elapsed >= AD_VIEW_SECONDS) {
+        setWaitingForReturn(false);
+        handleAdComplete();
+      }
+    }
+  }, [countdown, waitingForReturn, handleAdComplete]);
 
   const handleWatchClick = useCallback(() => {
     if (waitingForReturn || isWatching) return;
+    adOpenTimeRef.current = Date.now();
+    markAdOpened();
     openDirectLink();
     setWaitingForReturn(true);
     setCountdown(AD_VIEW_SECONDS);
@@ -112,7 +143,12 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
       {waitingForReturn && (
         <div className="flex items-center gap-2 py-3 px-3 rounded-xl bg-yellow-500/15 border border-yellow-500/30">
           <span className="text-lg">⚠️</span>
-          <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">Kamida 5 soniya ko'rishingiz kerak</p>
+          <div>
+            <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">Kamida 7 soniya ko'rishingiz kerak</p>
+            {countdown > 0 && (
+              <p className="text-[10px] text-yellow-600/70 dark:text-yellow-400/70">{countdown} soniya qoldi</p>
+            )}
+          </div>
         </div>
       )}
 

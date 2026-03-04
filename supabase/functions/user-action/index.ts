@@ -292,7 +292,19 @@ Deno.serve(async (req) => {
         }
 
         if (user.coins < amount_coins) {
-          result = { success: false, error: 'Tangalar yetarli emas' }
+          result = { success: false, error: 'Asosiy tangalar yetarli emas' }
+          break
+        }
+
+        // Calculate required bonus coins: 1300 per 10000 coins
+        const requiredBonusCoins = Math.ceil((amount_coins / 10000) * 1300)
+        const userBonusCoins = user.bonus_coins || 0
+
+        if (userBonusCoins < requiredBonusCoins) {
+          result = { 
+            success: false, 
+            error: `Bonus tanga yetarli emas! ${amount_coins.toLocaleString()} tanga yechish uchun ${requiredBonusCoins.toLocaleString()} bonus tanga kerak. Sizda: ${userBonusCoins.toLocaleString()} bonus tanga` 
+          }
           break
         }
 
@@ -311,11 +323,15 @@ Deno.serve(async (req) => {
           card_number: cleanCardNumber,
         })
 
+        // Deduct from both balances
         await supabase.from('users')
-          .update({ coins: user.coins - amount_coins })
+          .update({ 
+            coins: user.coins - amount_coins,
+            bonus_coins: userBonusCoins - requiredBonusCoins,
+          })
           .eq('telegram_id', telegram_id)
 
-        result = { success: true, amount_coins, amount_som: amountSom }
+        result = { success: true, amount_coins, amount_som: amountSom, bonus_deducted: requiredBonusCoins }
         break
       }
 

@@ -139,6 +139,7 @@ const Index = () => {
             user={user}
             telegramId={telegramId}
             referralEarnings={referralEarnings}
+            bonusCoins={user?.bonus_coins || 0}
             invokeAction={invokeAction}
             refreshUser={refreshUser}
           />
