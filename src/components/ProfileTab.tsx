@@ -12,6 +12,7 @@ interface ProfileTabProps {
   user: UserData | null;
   telegramId: number;
   referralEarnings?: number;
+  bonusCoins?: number;
   invokeAction: (action: string, params?: Record<string, any>) => Promise<any>;
   refreshUser: () => Promise<void>;
 }
@@ -34,7 +35,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
 };
 
 const ProfileTab = ({
-  coins, referralCount, user, telegramId, referralEarnings = 0,
+  coins, referralCount, user, telegramId, referralEarnings = 0, bonusCoins = 0,
   invokeAction, refreshUser,
 }: ProfileTabProps) => {
   const currentLevel = getCurrentLevel(referralCount);
@@ -95,7 +96,17 @@ const ProfileTab = ({
       return;
     }
     if (amount > coins) {
-      setWithdrawResult({ type: "error", message: "Tangalar yetarli emas" });
+      setWithdrawResult({ type: "error", message: "Asosiy tangalar yetarli emas" });
+      return;
+    }
+
+    // Check bonus coin requirement: 1300 per 10000
+    const requiredBonus = Math.ceil((amount / 10000) * 1300);
+    if (bonusCoins < requiredBonus) {
+      setWithdrawResult({ 
+        type: "error", 
+        message: `Bonus tanga yetarli emas! ${amount.toLocaleString()} tanga yechish uchun ${requiredBonus.toLocaleString()} bonus tanga kerak. Sizda: ${bonusCoins.toLocaleString()} bonus tanga` 
+      });
       return;
     }
 
@@ -115,10 +126,12 @@ const ProfileTab = ({
     });
 
     if (result?.success) {
-      setWithdrawResult({ type: "success", message: `So'rov yuborildi: ${result.amount_som?.toLocaleString()} so'm` });
+      const bonusMsg = result.bonus_deducted ? ` (${result.bonus_deducted} bonus tanga yechildi)` : '';
+      setWithdrawResult({ type: "success", message: `So'rov yuborildi: ${result.amount_som?.toLocaleString()} so'm${bonusMsg}` });
       setWithdrawAmount("");
       setCardNumber("");
       fetchWithdrawals();
+      await refreshUser();
     } else {
       setWithdrawResult({ type: "error", message: result?.error || "Xatolik yuz berdi" });
     }
@@ -255,7 +268,13 @@ const ProfileTab = ({
             className="w-full px-3 py-2 rounded-lg bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none"
           />
           {estimatedSom > 0 && (
-            <p className="text-xs text-primary font-bold">≈ {estimatedSom.toLocaleString()} so'm</p>
+            <div className="space-y-1">
+              <p className="text-xs text-primary font-bold">≈ {estimatedSom.toLocaleString()} so'm</p>
+              <p className="text-[10px] text-muted-foreground">
+                ⭐ Kerakli bonus tanga: <span className="font-bold text-yellow-500">{Math.ceil((parseInt(withdrawAmount) / 10000) * 1300).toLocaleString()}</span>
+                {' '}/ Sizda: <span className={`font-bold ${bonusCoins >= Math.ceil((parseInt(withdrawAmount) / 10000) * 1300) ? 'text-green-500' : 'text-red-500'}`}>{bonusCoins.toLocaleString()}</span>
+              </p>
+            </div>
           )}
           <div>
             <input

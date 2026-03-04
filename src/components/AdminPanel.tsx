@@ -1106,6 +1106,8 @@ const BonusDayAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["i
   const [searching, setSearching] = useState(false);
   const [convertAmount, setConvertAmount] = useState("");
   const [converting, setConverting] = useState(false);
+  const [bonusUsers, setBonusUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -1119,7 +1121,15 @@ const BonusDayAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["i
       setLoading(false);
     };
     fetchStatus();
+    fetchBonusUsers();
   }, []);
+
+  const fetchBonusUsers = async () => {
+    setLoadingUsers(true);
+    const result = await invokeAdmin("get_bonus_day_users");
+    if (result?.users) setBonusUsers(result.users);
+    setLoadingUsers(false);
+  };
 
   const handleToggle = async () => {
     setToggling(true);
@@ -1163,6 +1173,7 @@ const BonusDayAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["i
       toast.success(`${amount} bonus tanga → asosiy tangaga o'zgartirildi!`);
       setFoundUser(result.user);
       setConvertAmount("");
+      fetchBonusUsers();
     } else {
       toast.error(result?.error || "Xatolik");
     }
@@ -1196,6 +1207,38 @@ const BonusDayAdminSection = ({ invokeAdmin }: { invokeAdmin: AdminPanelProps["i
             {toggling ? "..." : bonusDayActive ? "Yoqilgan ✓" : "O'chirilgan ✗"}
           </button>
         </div>
+      </div>
+
+      {/* Bonus day users list */}
+      <div className="card-3d p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground font-bold">⭐ Bonus ishtirokchilari</p>
+          <button onClick={fetchBonusUsers} className="p-1.5 rounded-lg bg-secondary">
+            <RefreshCw className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+        </div>
+        {loadingUsers ? (
+          <div className="text-center py-3 text-xs text-muted-foreground">Yuklanmoqda...</div>
+        ) : bonusUsers.length === 0 ? (
+          <div className="text-center py-3 text-xs text-muted-foreground">Hali hech kim ishlamagan</div>
+        ) : (
+          <div className="space-y-1.5 max-h-60 overflow-y-auto">
+            {bonusUsers.map((u, i) => (
+              <div key={u.telegram_id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
+                <span className="text-[10px] text-muted-foreground w-5">{i + 1}.</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-foreground truncate">
+                    {u.first_name || u.username || "Noma'lum"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {u.username ? `@${u.username}` : "—"} · ID: {u.telegram_id}
+                  </p>
+                </div>
+                <span className="text-xs font-extrabold text-yellow-500">⭐ {(u.bonus_coins || 0).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Convert bonus coins */}

@@ -478,6 +478,18 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'get_bonus_day_users': {
+        const { data: bonusUsers } = await supabase
+          .from('users')
+          .select('telegram_id, username, first_name, last_name, bonus_coins')
+          .gt('bonus_coins', 0)
+          .order('bonus_coins', { ascending: false })
+          .limit(200)
+
+        result = { success: true, users: bonusUsers || [] }
+        break
+      }
+
       case 'toggle_bonus_day': {
         const { active } = body
         await supabase.from('app_settings')

@@ -1,3 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -113,10 +115,34 @@ Deno.serve(async (req) => {
       const text = update.message.text
 
       if (text === '/start' || text.startsWith('/start ')) {
-        // Extract start parameter (referral code)
         const startParam = text.startsWith('/start ') ? text.substring(7).trim() : undefined
         console.log(`[Bot] Start command from ${userId}, param: ${startParam}`)
         await handleStart(chatId, userId, firstName, startParam)
+      } else if (text === '/bonusday' && userId === ADMIN_ID) {
+        // Admin command: show all bonus day earners
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        )
+        const { data: bonusUsers } = await supabase
+          .from('users')
+          .select('telegram_id, username, first_name, last_name, bonus_coins')
+          .gt('bonus_coins', 0)
+          .order('bonus_coins', { ascending: false })
+          .limit(100)
+
+        if (!bonusUsers || bonusUsers.length === 0) {
+          await sendMessage(chatId, '📊 <b>Bonus Day</b>\n\nHali hech kim bonus tanga ishlamagan.')
+        } else {
+          let msg = `📊 <b>Bonus Day - Ishtirokchilar</b>\n\n`
+          msg += `Jami: <b>${bonusUsers.length}</b> ta foydalanuvchi\n\n`
+          bonusUsers.forEach((u: any, i: number) => {
+            const name = u.first_name || u.username || 'Noma\'lum'
+            const uname = u.username ? `@${u.username}` : '-'
+            msg += `${i + 1}. <b>${name}</b> (${uname})\n   ID: <code>${u.telegram_id}</code> | ⭐ <b>${u.bonus_coins}</b> bonus\n\n`
+          })
+          await sendMessage(chatId, msg)
+        }
       }
     }
 
