@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Gift, Clock, Copy, CheckCircle2, Ticket, ChevronRight, History, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { openDirectLink } from "@/lib/monetag";
+import { openRotatingDirectLink } from "@/lib/monetag";
 import coinImg from "@/assets/coin-3d.png";
 import videoAdIcon from "@/assets/video-ad-icon.png";
 import { toast } from "sonner";
@@ -130,7 +130,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
     if (adsCount >= maxAds || isWatching || cooldownRemaining > 0 || waitingForReturn) return;
     setIsWatching(true);
     // Open direct link
-    openDirectLink();
+    openRotatingDirectLink();
     // Start countdown
     setWaitingForReturn(true);
     setCountdown(AD_VIEW_SECONDS);

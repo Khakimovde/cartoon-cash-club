@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, ChevronRight } from "lucide-react";
+import { Sparkles, ChevronRight, Clock } from "lucide-react";
 import coinImg from "@/assets/coin-3d.png";
-import { openDirectLink, markAdOpened } from "@/lib/monetag";
+import { openRotatingDirectLink, markAdOpened } from "@/lib/monetag";
 
 interface BonusDayTabProps {
   bonusCoins: number;
@@ -12,19 +12,76 @@ interface BonusDayTabProps {
 
 const AD_VIEW_SECONDS = 7;
 const BONUS_PER_AD = 2;
+const MAX_ADS_PER_WINDOW = 5;
+const WINDOW_MINUTES = 10;
+
+// Get current 10-min window start and seconds remaining until next window
+function getWindowInfo() {
+  const now = new Date();
+  const minutes = now.getMinutes();
+  const windowStart = Math.floor(minutes / WINDOW_MINUTES) * WINDOW_MINUTES;
+  const nextWindow = windowStart + WINDOW_MINUTES;
+  const nextWindowTime = new Date(now);
+  nextWindowTime.setMinutes(nextWindow, 0, 0);
+  if (nextWindow >= 60) {
+    nextWindowTime.setHours(nextWindowTime.getHours() + 1);
+    nextWindowTime.setMinutes(0, 0, 0);
+  }
+  const secondsRemaining = Math.max(0, Math.floor((nextWindowTime.getTime() - now.getTime()) / 1000));
+  return { secondsRemaining };
+}
 
 const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps) => {
   const [countdown, setCountdown] = useState(0);
   const [waitingForReturn, setWaitingForReturn] = useState(false);
   const [isWatching, setIsWatching] = useState(false);
   const [localBonusCoins, setLocalBonusCoins] = useState(bonusCoins);
+  const [windowAdsCount, setWindowAdsCount] = useState(0);
+  const [windowCooldown, setWindowCooldown] = useState(0);
   const adOpenTimeRef = useRef<number>(0);
 
   useEffect(() => {
     setLocalBonusCoins(bonusCoins);
   }, [bonusCoins]);
 
-  // Countdown timer - visual only
+  // Load window ad count from backend
+  useEffect(() => {
+    loadWindowStatus();
+  }, []);
+
+  const loadWindowStatus = async () => {
+    const result = await invokeAction("get_bonus_window_status");
+    if (result?.success) {
+      setWindowAdsCount(result.window_ads_count || 0);
+    }
+    // Calculate cooldown
+    const { secondsRemaining } = getWindowInfo();
+    setWindowCooldown(secondsRemaining);
+  };
+
+  // Window cooldown timer
+  useEffect(() => {
+    if (windowAdsCount < MAX_ADS_PER_WINDOW) {
+      setWindowCooldown(0);
+      return;
+    }
+    const { secondsRemaining } = getWindowInfo();
+    setWindowCooldown(secondsRemaining);
+
+    const interval = setInterval(() => {
+      const { secondsRemaining: remaining } = getWindowInfo();
+      if (remaining <= 0) {
+        setWindowCooldown(0);
+        setWindowAdsCount(0);
+        clearInterval(interval);
+      } else {
+        setWindowCooldown(remaining);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [windowAdsCount]);
+
+  // Ad view countdown timer - visual only
   useEffect(() => {
     if (countdown <= 0) return;
     const timer = setInterval(() => {
@@ -44,10 +101,13 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
     const result = await invokeAction("watch_bonus_ad");
     if (result?.success) {
       setLocalBonusCoins(result.bonus_coins ?? localBonusCoins + BONUS_PER_AD);
+      setWindowAdsCount(result.window_ads_count ?? windowAdsCount + 1);
+    } else if (result?.error === 'Bonus window limit') {
+      setWindowAdsCount(MAX_ADS_PER_WINDOW);
     }
     await refreshUser();
     setIsWatching(false);
-  }, [invokeAction, refreshUser, localBonusCoins]);
+  }, [invokeAction, refreshUser, localBonusCoins, windowAdsCount]);
 
   // Listen for user returning to app
   useEffect(() => {
@@ -80,15 +140,23 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
   }, [countdown, waitingForReturn, handleAdComplete]);
 
   const handleWatchClick = useCallback(() => {
-    if (waitingForReturn || isWatching) return;
+    if (waitingForReturn || isWatching || windowAdsCount >= MAX_ADS_PER_WINDOW) return;
     adOpenTimeRef.current = Date.now();
     markAdOpened();
-    openDirectLink();
+    openRotatingDirectLink();
     setWaitingForReturn(true);
     setCountdown(AD_VIEW_SECONDS);
-  }, [waitingForReturn, isWatching]);
+  }, [waitingForReturn, isWatching, windowAdsCount]);
 
   const isProcessing = waitingForReturn || isWatching;
+  const isLimitReached = windowAdsCount >= MAX_ADS_PER_WINDOW;
+  const progress = MAX_ADS_PER_WINDOW > 0 ? (windowAdsCount / MAX_ADS_PER_WINDOW) * 100 : 0;
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   return (
     <motion.div
@@ -100,7 +168,7 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-yellow-500/20 to-orange-500/20">
           <Sparkles className="w-5 h-5 text-yellow-500" />
-          <span className="text-sm font-extrabold text-foreground">Bonus Day</span>
+          <span className="text-sm font-extrabold text-foreground">Bonus tanga</span>
           <Sparkles className="w-5 h-5 text-yellow-500" />
         </div>
         <p className="text-xs text-muted-foreground">
@@ -122,9 +190,9 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
         </div>
       </div>
 
-      {/* Ad reward info */}
+      {/* Ad reward info + progress */}
       <div className="card-3d p-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
             <span className="text-xl">📺</span>
           </div>
@@ -133,9 +201,26 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
             <p className="text-xs text-muted-foreground">
               Har bir reklama = <span className="font-bold text-yellow-500">{BONUS_PER_AD} bonus tanga</span>
             </p>
-            <p className="text-[10px] text-muted-foreground">Cheksiz ko'rish mumkin!</p>
+            <p className="text-[10px] text-muted-foreground">Har 10 daqiqada {MAX_ADS_PER_WINDOW} ta reklama</p>
           </div>
           <img src={coinImg} alt="coin" className="w-8 h-8" />
+        </div>
+
+        {/* Progress bar */}
+        <div className="mb-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+            <span>Jarayon</span>
+            <span className="font-bold">{windowAdsCount}/{MAX_ADS_PER_WINDOW}</span>
+          </div>
+          <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+            <motion.div
+              className="h-full rounded-full"
+              style={{ background: "var(--gradient-primary)" }}
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+            />
+          </div>
         </div>
       </div>
 
@@ -152,15 +237,27 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
         </div>
       )}
 
+      {/* Window limit reached */}
+      {isLimitReached && windowCooldown > 0 && (
+        <div className="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-muted">
+          <Clock className="w-4 h-4 text-primary animate-pulse" />
+          <div className="text-center">
+            <p className="text-[10px] text-muted-foreground">Keyingi oynagacha</p>
+            <p className="text-lg font-extrabold text-primary">{formatTime(windowCooldown)}</p>
+            <p className="text-[10px] text-muted-foreground">dan keyin yangilanadi</p>
+          </div>
+        </div>
+      )}
+
       {/* Watch button */}
       <button
         onClick={handleWatchClick}
-        disabled={isProcessing}
+        disabled={isLimitReached || isProcessing}
         className="w-full py-4 rounded-xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 active:scale-[0.98]"
         style={{
-          background: "var(--gradient-primary)",
-          color: "hsl(var(--primary-foreground))",
-          boxShadow: "0 4px 14px hsla(215, 90%, 55%, 0.3)",
+          background: isLimitReached ? "hsl(var(--muted))" : "var(--gradient-primary)",
+          color: isLimitReached ? "hsl(var(--muted-foreground))" : "hsl(var(--primary-foreground))",
+          boxShadow: isLimitReached ? "none" : "0 4px 14px hsla(215, 90%, 55%, 0.3)",
           opacity: isProcessing ? 0.7 : 1,
         }}
       >
@@ -168,6 +265,11 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
           <>
             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             Tasdiqlanmoqda...
+          </>
+        ) : isLimitReached ? (
+          <>
+            <Clock className="w-4 h-4" />
+            Limit tugadi
           </>
         ) : (
           <>
