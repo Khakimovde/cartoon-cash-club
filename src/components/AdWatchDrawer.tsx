@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronRight, Clock, CheckCircle2 } from "lucide-react";
+import { X, ChevronRight, Clock } from "lucide-react";
 import coinImg from "@/assets/coin-3d.png";
 import videoAdIcon from "@/assets/video-ad-icon.png";
 import { openDirectLink, markAdOpened } from "@/lib/monetag";
@@ -28,10 +28,9 @@ const AdWatchDrawer = ({
   onWatchAd,
   isWatching,
 }: AdWatchDrawerProps) => {
-  const [countdown, setCountdown] = useState(0);
-  const [waitingForReturn, setWaitingForReturn] = useState(false);
-  const [adConfirmed, setAdConfirmed] = useState(false);
-  const adOpenTimeRef = useRef<number>(0);
+  const [waitingForAd, setWaitingForAd] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -44,65 +43,26 @@ const AdWatchDrawer = ({
   const isMaxReached = watchedAds >= maxAds;
   const progress = maxAds > 0 ? (watchedAds / maxAds) * 100 : 0;
 
-  // Countdown timer - just visual, doesn't auto-confirm
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [countdown]);
-
-  // Listen for user returning to app (visibility change)
-  useEffect(() => {
-    if (!waitingForReturn) return;
-    
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && waitingForReturn) {
-        const elapsed = Math.floor((Date.now() - adOpenTimeRef.current) / 1000);
-        if (elapsed >= AD_VIEW_SECONDS) {
-          // User viewed for 7+ seconds - auto confirm
-          setWaitingForReturn(false);
-          setCountdown(0);
-          setAdConfirmed(true);
-          onWatchAd().then(() => setAdConfirmed(false));
-        }
-        // If < 7 seconds, warning stays visible, countdown continues
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [waitingForReturn, onWatchAd]);
-
-  // Also check when countdown reaches 0 and user is still here
-  useEffect(() => {
-    if (countdown === 0 && waitingForReturn) {
-      const elapsed = Math.floor((Date.now() - adOpenTimeRef.current) / 1000);
-      if (elapsed >= AD_VIEW_SECONDS) {
-        setWaitingForReturn(false);
-        setAdConfirmed(true);
-        onWatchAd().then(() => setAdConfirmed(false));
-      }
-    }
-  }, [countdown, waitingForReturn, onWatchAd]);
-
   const handleWatchClick = useCallback(() => {
-    if (isMaxReached || isWatching || isOnCooldown || waitingForReturn || adConfirmed) return;
-    adOpenTimeRef.current = Date.now();
+    if (isMaxReached || isWatching || isOnCooldown || waitingForAd) return;
+    
     markAdOpened();
     openDirectLink();
-    setWaitingForReturn(true);
-    setCountdown(AD_VIEW_SECONDS);
-  }, [isMaxReached, isWatching, isOnCooldown, waitingForReturn, adConfirmed]);
+    setWaitingForAd(true);
+    setShowWarning(false);
 
-  const isProcessing = waitingForReturn || isWatching || adConfirmed;
+    // Clear any existing timer
+    if (timerRef.current) clearTimeout(timerRef.current);
+
+    // After 7 seconds, auto-confirm
+    timerRef.current = setTimeout(() => {
+      setWaitingForAd(false);
+      setShowWarning(false);
+      onWatchAd();
+    }, AD_VIEW_SECONDS * 1000);
+  }, [isMaxReached, isWatching, isOnCooldown, waitingForAd, onWatchAd]);
+
+  const isProcessing = waitingForAd || isWatching;
 
   return (
     <AnimatePresence>
@@ -177,16 +137,11 @@ const AdWatchDrawer = ({
                 </div>
               </div>
 
-              {/* Waiting indicator */}
-              {waitingForReturn && (
+              {/* Warning - shown only if user came back too early */}
+              {showWarning && (
                 <div className="flex items-center gap-2 mb-3 py-3 px-3 rounded-lg bg-yellow-500/15 border border-yellow-500/30">
                   <span className="text-lg">⚠️</span>
-                  <div>
-                    <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">Kamida 7 soniya ko'rishingiz kerak</p>
-                    {countdown > 0 && (
-                      <p className="text-[10px] text-yellow-600/70 dark:text-yellow-400/70">{countdown} soniya qoldi</p>
-                    )}
-                  </div>
+                  <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">Kamida 7 soniya ko'rishingiz kerak</p>
                 </div>
               )}
 

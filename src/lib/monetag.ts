@@ -1,4 +1,5 @@
 // Monetag Direct Link Integration
+import { showInterstitialAd } from './richads';
 // Main direct link (for tasks/ads)
 const DIRECT_LINK_MAIN = 'https://crn77.com/4/10652500';
 // Secondary direct link (for promo & bonus sections)
@@ -9,11 +10,13 @@ let rotationIndex = 0;
 
 // Open the main direct link (used in tasks/ads section only)
 export const openDirectLink = (): void => {
+  showInterstitialAd(); // trigger RichAds interstitial
   openInExternalBrowser(DIRECT_LINK_MAIN);
 };
 
 // Open rotating direct link (alternates between main and alt) - used in promo & bonus sections
 export const openRotatingDirectLink = (): void => {
+  showInterstitialAd(); // trigger RichAds interstitial
   const link = rotationIndex % 2 === 0 ? DIRECT_LINK_MAIN : DIRECT_LINK_ALT;
   rotationIndex++;
   openInExternalBrowser(link);
