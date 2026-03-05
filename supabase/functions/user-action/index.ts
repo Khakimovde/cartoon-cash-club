@@ -413,6 +413,34 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'get_bonus_window_status': {
+        // Count ads in current 10-min window
+        const now = new Date()
+        const minutes = now.getMinutes()
+        const windowStartMin = Math.floor(minutes / 10) * 10
+        const windowStartTime = new Date(now)
+        windowStartTime.setMinutes(windowStartMin, 0, 0)
+
+        const { count: windowAds } = await supabase
+          .from('ad_views')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_telegram_id', telegram_id)
+          .gte('viewed_at', windowStartTime.toISOString())
+          .is('coins_earned', null) // bonus ads have null coins_earned, we use a marker
+
+        // Actually let's use a simpler approach - count bonus ad views
+        // We'll track bonus ads separately using a tag
+        const { data: bonusViews } = await supabase
+          .from('ad_views')
+          .select('id')
+          .eq('user_telegram_id', telegram_id)
+          .eq('coins_earned', -1) // marker for bonus ads
+          .gte('viewed_at', windowStartTime.toISOString())
+
+        result = { success: true, window_ads_count: bonusViews?.length || 0 }
+        break
+      }
+
       case 'watch_bonus_ad': {
         // Check if bonus day is active
         const { data: bonusSetting } = await supabase
@@ -426,14 +454,40 @@ Deno.serve(async (req) => {
           break
         }
 
+        // Check 10-min window limit
+        const nowB = new Date()
+        const minutesB = nowB.getMinutes()
+        const windowStartMinB = Math.floor(minutesB / 10) * 10
+        const windowStartTimeB = new Date(nowB)
+        windowStartTimeB.setMinutes(windowStartMinB, 0, 0)
+
+        const { data: bonusWindowViews } = await supabase
+          .from('ad_views')
+          .select('id')
+          .eq('user_telegram_id', telegram_id)
+          .eq('coins_earned', -1)
+          .gte('viewed_at', windowStartTimeB.toISOString())
+
+        const windowCount = bonusWindowViews?.length || 0
+        if (windowCount >= 5) {
+          result = { success: false, error: 'Bonus window limit', window_ads_count: windowCount }
+          break
+        }
+
         const bonusReward = 2
         const newBonusCoins = (user.bonus_coins || 0) + bonusReward
+
+        // Record bonus ad view with coins_earned = -1 as marker
+        await supabase.from('ad_views').insert({
+          user_telegram_id: telegram_id,
+          coins_earned: -1,
+        })
 
         await supabase.from('users')
           .update({ bonus_coins: newBonusCoins })
           .eq('telegram_id', telegram_id)
 
-        result = { success: true, bonus_coins: newBonusCoins, coins_earned: bonusReward }
+        result = { success: true, bonus_coins: newBonusCoins, coins_earned: bonusReward, window_ads_count: windowCount + 1 }
         break
       }
 

@@ -1,17 +1,32 @@
 // Monetag Direct Link Integration
-// Direct link: https://crn77.com/4/10652500
+// Main direct link (for tasks/ads)
+const DIRECT_LINK_MAIN = 'https://crn77.com/4/10652500';
+// Secondary direct link (for promo & bonus sections)
+const DIRECT_LINK_ALT = 'https://omg10.com/4/10684278';
 
-const DIRECT_LINK = 'https://crn77.com/4/10652500';
+// Rotation counter for promo/bonus sections
+let rotationIndex = 0;
 
+// Open the main direct link (used in tasks/ads section only)
 export const openDirectLink = (): void => {
+  openInExternalBrowser(DIRECT_LINK_MAIN);
+};
+
+// Open rotating direct link (alternates between main and alt) - used in promo & bonus sections
+export const openRotatingDirectLink = (): void => {
+  const link = rotationIndex % 2 === 0 ? DIRECT_LINK_MAIN : DIRECT_LINK_ALT;
+  rotationIndex++;
+  openInExternalBrowser(link);
+};
+
+function openInExternalBrowser(url: string): void {
   const tg = (window as any).Telegram?.WebApp;
   if (tg?.openLink) {
-    // Force open in external browser, not in Telegram's WebView
-    tg.openLink(DIRECT_LINK, { try_instant_view: false });
+    tg.openLink(url, { try_instant_view: false });
   } else {
-    window.open(DIRECT_LINK, '_blank');
+    window.open(url, '_blank');
   }
-};
+}
 
 // Track when user left for ad
 let adOpenTime: number | null = null;
