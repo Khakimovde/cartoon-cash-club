@@ -100,8 +100,8 @@ const ProfileTab = ({
       return;
     }
 
-    // Check bonus coin requirement: 1300 per 10000
-    const requiredBonus = Math.ceil((amount / 10000) * 1300);
+    // Check bonus coin requirement: 3000 per 10000
+    const requiredBonus = Math.ceil((amount / 10000) * 3000);
     if (bonusCoins < requiredBonus) {
       setWithdrawResult({ 
         type: "error", 
@@ -270,10 +270,10 @@ const ProfileTab = ({
           {estimatedSom > 0 && (
             <div className="space-y-1">
               <p className="text-xs text-primary font-bold">≈ {estimatedSom.toLocaleString()} so'm</p>
-              <p className="text-[10px] text-muted-foreground">
-                ⭐ Kerakli bonus tanga: <span className="font-bold text-yellow-500">{Math.ceil((parseInt(withdrawAmount) / 10000) * 1300).toLocaleString()}</span>
-                {' '}/ Sizda: <span className={`font-bold ${bonusCoins >= Math.ceil((parseInt(withdrawAmount) / 10000) * 1300) ? 'text-green-500' : 'text-red-500'}`}>{bonusCoins.toLocaleString()}</span>
-              </p>
+               <p className="text-[10px] text-muted-foreground">
+                 ⭐ Kerakli bonus tanga: <span className="font-bold text-yellow-500">{Math.ceil((parseInt(withdrawAmount) / 10000) * 3000).toLocaleString()}</span>
+                 {' '}/ Sizda: <span className={`font-bold ${bonusCoins >= Math.ceil((parseInt(withdrawAmount) / 10000) * 3000) ? 'text-green-500' : 'text-red-500'}`}>{bonusCoins.toLocaleString()}</span>
+               </p>
             </div>
           )}
           <div>

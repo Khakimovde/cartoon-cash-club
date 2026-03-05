@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Gift, Clock, Copy, CheckCircle2, Ticket, ChevronRight, History, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,8 +36,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  const [waitingForReturn, setWaitingForReturn] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxAds = 10;
 
   useEffect(() => {
@@ -79,23 +78,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
     return () => clearInterval(interval);
   }, [cooldownEnd]);
 
-  // Countdown timer for ad viewing
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          setWaitingForReturn(false);
-          // Auto-confirm ad view
-          confirmAdView();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [countdown]);
+  // No countdown timer needed - using pure setTimeout
 
   const confirmAdView = async () => {
     try {
@@ -126,15 +109,20 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
     }
   };
 
+  const [waitingForAd, setWaitingForAd] = useState(false);
+
   const handleWatchAd = useCallback(() => {
-    if (adsCount >= maxAds || isWatching || cooldownRemaining > 0 || waitingForReturn) return;
+    if (adsCount >= maxAds || isWatching || cooldownRemaining > 0 || waitingForAd) return;
     setIsWatching(true);
-    // Open direct link
     openRotatingDirectLink();
-    // Start countdown
-    setWaitingForReturn(true);
-    setCountdown(AD_VIEW_SECONDS);
-  }, [adsCount, isWatching, cooldownRemaining, waitingForReturn]);
+    setWaitingForAd(true);
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setWaitingForAd(false);
+      confirmAdView();
+    }, AD_VIEW_SECONDS * 1000);
+  }, [adsCount, isWatching, cooldownRemaining, waitingForAd]);
 
   const handleRedeem = async () => {
     const code = promoInput.trim();
@@ -199,7 +187,7 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
   const progress = adsCount / maxAds;
   const isOnCooldown = cooldownRemaining > 0;
   const isMaxReached = adsCount >= maxAds;
-  const isProcessing = waitingForReturn || isWatching;
+  const isProcessing = waitingForAd || isWatching;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -308,12 +296,10 @@ const PromoTab = ({ coins, telegramId, refreshUser }: PromoTabProps) => {
         </div>
 
         {/* Waiting indicator */}
-        {waitingForReturn && (
+        {waitingForAd && (
           <div className="flex items-center justify-center gap-2 mb-3 py-3 px-3 rounded-lg bg-primary/10">
             <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <div className="text-center">
-              <p className="text-xs font-bold text-foreground">Kamida 5 soniya ko'rishingiz kerak</p>
-            </div>
+            <p className="text-xs font-bold text-foreground">Tekshirilmoqda...</p>
           </div>
         )}
 

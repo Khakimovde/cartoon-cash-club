@@ -144,6 +144,7 @@ const UserManagementSection = ({ invokeAdmin, refreshUser }: { invokeAdmin: Admi
   const [foundUser, setFoundUser] = useState<any>(null);
   const [searching, setSearching] = useState(false);
   const [coinsAmount, setCoinsAmount] = useState("");
+  const [coinsTarget, setCoinsTarget] = useState<"main" | "bonus">("main");
   const [processing, setProcessing] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [levelProcessing, setLevelProcessing] = useState(false);
@@ -179,13 +180,15 @@ const UserManagementSection = ({ invokeAdmin, refreshUser }: { invokeAdmin: Admi
       target_telegram_id: foundUser.telegram_id,
       amount,
       operation: action,
+      target: coinsTarget,
     });
 
     if (result?.success) {
+      const label = coinsTarget === "bonus" ? "bonus tanga" : "tanga";
       toast.success(
         action === "add"
-          ? `+${amount} tanga qo'shildi`
-          : `-${amount} tanga ayirildi`
+          ? `+${amount} ${label} qo'shildi`
+          : `-${amount} ${label} ayirildi`
       );
       setFoundUser(result.user);
       setCoinsAmount("");
@@ -271,11 +274,17 @@ const UserManagementSection = ({ invokeAdmin, refreshUser }: { invokeAdmin: Admi
           </div>
 
           {/* Balance info */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="text-center p-2 rounded-lg bg-secondary">
-              <p className="text-xs text-muted-foreground">Balans</p>
+              <p className="text-xs text-muted-foreground">💰 Asosiy</p>
               <p className="text-sm font-extrabold text-coin">{(foundUser.coins || 0).toLocaleString()}</p>
             </div>
+            <div className="text-center p-2 rounded-lg bg-secondary">
+              <p className="text-xs text-muted-foreground">⭐ Bonus</p>
+              <p className="text-sm font-extrabold text-yellow-500">{(foundUser.bonus_coins || 0).toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <div className="text-center p-2 rounded-lg bg-secondary">
               <p className="text-xs text-muted-foreground">Referallar</p>
               <p className="text-sm font-extrabold text-foreground">{foundUser.referral_count || 0}</p>
@@ -328,6 +337,25 @@ const UserManagementSection = ({ invokeAdmin, refreshUser }: { invokeAdmin: Admi
           {/* Modify coins */}
           <div>
             <p className="text-xs text-muted-foreground mb-2">Tanga qo'shish / ayirish</p>
+            {/* Target selector */}
+            <div className="flex gap-1.5 mb-2">
+              <button
+                onClick={() => setCoinsTarget("main")}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  coinsTarget === "main" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
+                }`}
+              >
+                💰 Asosiy tanga
+              </button>
+              <button
+                onClick={() => setCoinsTarget("bonus")}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  coinsTarget === "bonus" ? "bg-yellow-500 text-white" : "bg-secondary text-muted-foreground"
+                }`}
+              >
+                ⭐ Bonus tanga
+              </button>
+            </div>
             <div className="flex gap-2">
               <input
                 value={coinsAmount}

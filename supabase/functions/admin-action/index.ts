@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
       }
 
       case 'modify_user_coins': {
-        const { target_telegram_id, amount, operation } = body
+        const { target_telegram_id, amount, operation, target } = body
         if (!target_telegram_id || !amount || !operation) {
           result = { success: false, error: 'Missing required fields' }
           break
@@ -115,18 +115,19 @@ Deno.serve(async (req) => {
           break
         }
 
-        let newCoins = targetUser.coins || 0
+        const field = target === 'bonus' ? 'bonus_coins' : 'coins'
+        let newValue = targetUser[field] || 0
         if (operation === 'add') {
-          newCoins += parsedAmount
+          newValue += parsedAmount
         } else if (operation === 'subtract') {
-          newCoins = Math.max(0, newCoins - parsedAmount)
+          newValue = Math.max(0, newValue - parsedAmount)
         } else {
           result = { success: false, error: 'Invalid operation' }
           break
         }
 
         await supabase.from('users')
-          .update({ coins: newCoins })
+          .update({ [field]: newValue })
           .eq('telegram_id', target_telegram_id)
 
         const { data: updatedUser } = await supabase

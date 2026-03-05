@@ -15,7 +15,6 @@ const BONUS_PER_AD = 2;
 const MAX_ADS_PER_WINDOW = 5;
 const WINDOW_MINUTES = 10;
 
-// Get current 10-min window start and seconds remaining until next window
 function getWindowInfo() {
   const now = new Date();
   const minutes = now.getMinutes();
@@ -32,19 +31,17 @@ function getWindowInfo() {
 }
 
 const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps) => {
-  const [countdown, setCountdown] = useState(0);
-  const [waitingForReturn, setWaitingForReturn] = useState(false);
+  const [waitingForAd, setWaitingForAd] = useState(false);
   const [isWatching, setIsWatching] = useState(false);
   const [localBonusCoins, setLocalBonusCoins] = useState(bonusCoins);
   const [windowAdsCount, setWindowAdsCount] = useState(0);
   const [windowCooldown, setWindowCooldown] = useState(0);
-  const adOpenTimeRef = useRef<number>(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setLocalBonusCoins(bonusCoins);
   }, [bonusCoins]);
 
-  // Load window ad count from backend
   useEffect(() => {
     loadWindowStatus();
   }, []);
@@ -54,7 +51,6 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
     if (result?.success) {
       setWindowAdsCount(result.window_ads_count || 0);
     }
-    // Calculate cooldown
     const { secondsRemaining } = getWindowInfo();
     setWindowCooldown(secondsRemaining);
   };
@@ -81,21 +77,6 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
     return () => clearInterval(interval);
   }, [windowAdsCount]);
 
-  // Ad view countdown timer - visual only
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [countdown]);
-
   const handleAdComplete = useCallback(async () => {
     setIsWatching(true);
     const result = await invokeAction("watch_bonus_ad");
@@ -109,46 +90,24 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
     setIsWatching(false);
   }, [invokeAction, refreshUser, localBonusCoins, windowAdsCount]);
 
-  // Listen for user returning to app
-  useEffect(() => {
-    if (!waitingForReturn) return;
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && waitingForReturn) {
-        const elapsed = Math.floor((Date.now() - adOpenTimeRef.current) / 1000);
-        if (elapsed >= AD_VIEW_SECONDS) {
-          setWaitingForReturn(false);
-          setCountdown(0);
-          handleAdComplete();
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [waitingForReturn, handleAdComplete]);
-
-  // Check when countdown reaches 0
-  useEffect(() => {
-    if (countdown === 0 && waitingForReturn) {
-      const elapsed = Math.floor((Date.now() - adOpenTimeRef.current) / 1000);
-      if (elapsed >= AD_VIEW_SECONDS) {
-        setWaitingForReturn(false);
-        handleAdComplete();
-      }
-    }
-  }, [countdown, waitingForReturn, handleAdComplete]);
-
   const handleWatchClick = useCallback(() => {
-    if (waitingForReturn || isWatching || windowAdsCount >= MAX_ADS_PER_WINDOW) return;
-    adOpenTimeRef.current = Date.now();
+    if (waitingForAd || isWatching || windowAdsCount >= MAX_ADS_PER_WINDOW) return;
+    
     markAdOpened();
     openRotatingDirectLink();
-    setWaitingForReturn(true);
-    setCountdown(AD_VIEW_SECONDS);
-  }, [waitingForReturn, isWatching, windowAdsCount]);
+    setWaitingForAd(true);
 
-  const isProcessing = waitingForReturn || isWatching;
+    // Clear any existing timer
+    if (timerRef.current) clearTimeout(timerRef.current);
+
+    // After 7 seconds, auto-confirm
+    timerRef.current = setTimeout(() => {
+      setWaitingForAd(false);
+      handleAdComplete();
+    }, AD_VIEW_SECONDS * 1000);
+  }, [waitingForAd, isWatching, windowAdsCount, handleAdComplete]);
+
+  const isProcessing = waitingForAd || isWatching;
   const isLimitReached = windowAdsCount >= MAX_ADS_PER_WINDOW;
   const progress = MAX_ADS_PER_WINDOW > 0 ? (windowAdsCount / MAX_ADS_PER_WINDOW) * 100 : 0;
 
@@ -223,19 +182,6 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
           </div>
         </div>
       </div>
-
-      {/* Waiting indicator */}
-      {waitingForReturn && (
-        <div className="flex items-center gap-2 py-3 px-3 rounded-xl bg-yellow-500/15 border border-yellow-500/30">
-          <span className="text-lg">⚠️</span>
-          <div>
-            <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">Kamida 7 soniya ko'rishingiz kerak</p>
-            {countdown > 0 && (
-              <p className="text-[10px] text-yellow-600/70 dark:text-yellow-400/70">{countdown} soniya qoldi</p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Window limit reached */}
       {isLimitReached && windowCooldown > 0 && (

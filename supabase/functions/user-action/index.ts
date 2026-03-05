@@ -296,8 +296,8 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Calculate required bonus coins: 1300 per 10000 coins
-        const requiredBonusCoins = Math.ceil((amount_coins / 10000) * 1300)
+        // Calculate required bonus coins: 3000 per 10000 coins
+        const requiredBonusCoins = Math.ceil((amount_coins / 10000) * 3000)
         const userBonusCoins = user.bonus_coins || 0
 
         if (userBonusCoins < requiredBonusCoins) {
