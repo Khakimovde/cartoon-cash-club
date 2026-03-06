@@ -1,0 +1,1 @@
+UPDATE app_settings SET value = '15', updated_at = now() WHERE key = 'ad_reward_coins';

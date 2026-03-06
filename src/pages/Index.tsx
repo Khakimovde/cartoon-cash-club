@@ -9,9 +9,11 @@ import AdminPanel from "@/components/AdminPanel";
 import BonusDayTab from "@/components/BonusDayTab";
 import { useTelegram } from "@/hooks/useTelegram";
 import coinImg from "@/assets/coin-3d.png";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { showBannerAd } from "@/lib/richads";
 
 const ADMIN_PASSWORD = "Azizbek335161606";
+const BANNER_INTERVAL_MS = 30000; // 30 seconds
 
 const Index = () => {
   const {
@@ -25,6 +27,19 @@ const Index = () => {
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [adminPasswordError, setAdminPasswordError] = useState(false);
+
+  // RichAds banner every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      showBannerAd();
+    }, BANNER_INTERVAL_MS);
+    // Show first banner after 10 seconds
+    const initial = setTimeout(() => showBannerAd(), 10000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(initial);
+    };
+  }, []);
 
   // Not Telegram - show blocked screen
   if (!loading && !isTelegram) {

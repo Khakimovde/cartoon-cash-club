@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, ChevronRight, Clock, ListChecks, Users, Share2, Gift } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { openDirectLink } from "@/lib/monetag";
+// Direct link import removed - Tasks now uses Monetag SDK
 import coinImg from "@/assets/coin-3d.png";
 import videoAdIcon from "@/assets/video-ad-icon.png";
 import megaphoneIcon from "@/assets/megaphone-icon.png";

@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, ChevronRight, Clock } from "lucide-react";
 import coinImg from "@/assets/coin-3d.png";
-import { openRotatingDirectLink, markAdOpened } from "@/lib/monetag";
+import { showInterstitialAd } from "@/lib/richads";
+import { openRotatingDirectLink } from "@/lib/monetag";
 
 interface BonusDayTabProps {
   bonusCoins: number;
@@ -15,19 +16,12 @@ const BONUS_PER_AD = 2;
 const MAX_ADS_PER_WINDOW = 5;
 const WINDOW_MINUTES = 10;
 
-function getWindowInfo() {
-  const now = new Date();
-  const minutes = now.getMinutes();
-  const windowStart = Math.floor(minutes / WINDOW_MINUTES) * WINDOW_MINUTES;
-  const nextWindow = windowStart + WINDOW_MINUTES;
-  const nextWindowTime = new Date(now);
-  nextWindowTime.setMinutes(nextWindow, 0, 0);
-  if (nextWindow >= 60) {
-    nextWindowTime.setHours(nextWindowTime.getHours() + 1);
-    nextWindowTime.setMinutes(0, 0, 0);
-  }
-  const secondsRemaining = Math.max(0, Math.floor((nextWindowTime.getTime() - now.getTime()) / 1000));
-  return { secondsRemaining };
+// Timezone-independent 10-minute window calculation using epoch
+function getWindowSecondsRemaining(): number {
+  const now = Date.now();
+  const msPerWindow = WINDOW_MINUTES * 60 * 1000;
+  const nextWindowStart = (Math.floor(now / msPerWindow) + 1) * msPerWindow;
+  return Math.max(0, Math.ceil((nextWindowStart - now) / 1000));
 }
 
 const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps) => {
@@ -51,21 +45,18 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
     if (result?.success) {
       setWindowAdsCount(result.window_ads_count || 0);
     }
-    const { secondsRemaining } = getWindowInfo();
-    setWindowCooldown(secondsRemaining);
   };
 
-  // Window cooldown timer
+  // Window cooldown timer - only when limit reached
   useEffect(() => {
     if (windowAdsCount < MAX_ADS_PER_WINDOW) {
       setWindowCooldown(0);
       return;
     }
-    const { secondsRemaining } = getWindowInfo();
-    setWindowCooldown(secondsRemaining);
+    setWindowCooldown(getWindowSecondsRemaining());
 
     const interval = setInterval(() => {
-      const { secondsRemaining: remaining } = getWindowInfo();
+      const remaining = getWindowSecondsRemaining();
       if (remaining <= 0) {
         setWindowCooldown(0);
         setWindowAdsCount(0);
@@ -90,12 +81,16 @@ const BonusDayTab = ({ bonusCoins, invokeAction, refreshUser }: BonusDayTabProps
     setIsWatching(false);
   }, [invokeAction, refreshUser, localBonusCoins, windowAdsCount]);
 
-  const handleWatchClick = useCallback(() => {
+  const handleWatchClick = useCallback(async () => {
     if (waitingForAd || isWatching || windowAdsCount >= MAX_ADS_PER_WINDOW) return;
     
-    markAdOpened();
-    openRotatingDirectLink();
     setWaitingForAd(true);
+
+    // Try RichAds interstitial first, fallback to rotating direct links
+    const shown = await showInterstitialAd();
+    if (!shown) {
+      openRotatingDirectLink();
+    }
 
     // Clear any existing timer
     if (timerRef.current) clearTimeout(timerRef.current);

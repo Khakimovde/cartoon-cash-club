@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, ChevronRight, Clock } from "lucide-react";
 import coinImg from "@/assets/coin-3d.png";
 import videoAdIcon from "@/assets/video-ad-icon.png";
-import { openDirectLink, markAdOpened } from "@/lib/monetag";
+import { showMonetagAd } from "@/lib/monetag-sdk";
 
 interface AdWatchDrawerProps {
   isOpen: boolean;
@@ -16,8 +16,6 @@ interface AdWatchDrawerProps {
   isWatching: boolean;
 }
 
-const AD_VIEW_SECONDS = 7;
-
 const AdWatchDrawer = ({
   isOpen,
   onClose,
@@ -29,7 +27,6 @@ const AdWatchDrawer = ({
   isWatching,
 }: AdWatchDrawerProps) => {
   const [waitingForAd, setWaitingForAd] = useState(false);
-  const [showWarning, setShowWarning] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const formatTime = (seconds: number) => {
@@ -43,23 +40,20 @@ const AdWatchDrawer = ({
   const isMaxReached = watchedAds >= maxAds;
   const progress = maxAds > 0 ? (watchedAds / maxAds) * 100 : 0;
 
-  const handleWatchClick = useCallback(() => {
+  const handleWatchClick = useCallback(async () => {
     if (isMaxReached || isWatching || isOnCooldown || waitingForAd) return;
     
-    markAdOpened();
-    openDirectLink();
     setWaitingForAd(true);
-    setShowWarning(false);
 
-    // Clear any existing timer
+    // Show Monetag SDK ad
+    await showMonetagAd();
+
+    // 7 second wait then confirm
     if (timerRef.current) clearTimeout(timerRef.current);
-
-    // After 7 seconds, auto-confirm
     timerRef.current = setTimeout(() => {
       setWaitingForAd(false);
-      setShowWarning(false);
       onWatchAd();
-    }, AD_VIEW_SECONDS * 1000);
+    }, 7000);
   }, [isMaxReached, isWatching, isOnCooldown, waitingForAd, onWatchAd]);
 
   const isProcessing = waitingForAd || isWatching;
@@ -136,14 +130,6 @@ const AdWatchDrawer = ({
                   />
                 </div>
               </div>
-
-              {/* Warning - shown only if user came back too early */}
-              {showWarning && (
-                <div className="flex items-center gap-2 mb-3 py-3 px-3 rounded-lg bg-yellow-500/15 border border-yellow-500/30">
-                  <span className="text-lg">⚠️</span>
-                  <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">Kamida 7 soniya ko'rishingiz kerak</p>
-                </div>
-              )}
 
               {/* Cooldown / limit info */}
               {isMaxReached && (
