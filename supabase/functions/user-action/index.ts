@@ -29,6 +29,14 @@ function getTashkentDayStart(): string {
   return utcDayStart.toISOString()
 }
 
+// Get start of current 10-minute window using epoch (timezone-independent)
+function getTenMinuteWindowStart(): string {
+  const now = Date.now()
+  const msPerWindow = 10 * 60 * 1000
+  const windowStart = Math.floor(now / msPerWindow) * msPerWindow
+  return new Date(windowStart).toISOString()
+}
+
 // Referral bonus percentages based on referral count
 function getReferralBonusPercent(referralCount: number): number {
   if (referralCount >= 100) return 25
@@ -128,22 +136,25 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'watch_ad': {
-        const adReward = parseInt(getSetting('ad_reward_coins') || '13')
+        const adReward = parseInt(getSetting('ad_reward_coins') || '15')
         const maxAds = parseInt(getSetting('max_ads_per_session') || '10')
 
         const windowStart = getSixHourBoundary()
+        // Count only regular ads (coins_earned >= 0), not bonus ads (coins_earned = -1)
         const { count: windowAds } = await supabase
           .from('ad_views')
           .select('*', { count: 'exact', head: true })
           .eq('user_telegram_id', telegram_id)
           .gte('viewed_at', windowStart)
+          .gte('coins_earned', 0)
 
-        if ((windowAds || 0) >= maxAds) {
-          result = { success: false, error: 'Bu oyna uchun reklama limiti tugadi' }
+        const currentCount = windowAds || 0
+        if (currentCount >= maxAds) {
+          result = { success: false, error: 'Bu oyna uchun reklama limiti tugadi', ads_today: currentCount }
           break
         }
 
-        const newAdsCount = (windowAds || 0) + 1
+        const newAdsCount = currentCount + 1
         const isLastAd = newAdsCount >= maxAds
         const coinsToAdd = isLastAd ? (adReward * maxAds) : 0
 
@@ -153,8 +164,15 @@ Deno.serve(async (req) => {
         })
 
         if (isLastAd) {
+          // Re-read user for fresh coins
+          const { data: freshUser } = await supabase
+            .from('users')
+            .select('coins')
+            .eq('telegram_id', telegram_id)
+            .single()
+          
           await supabase.from('users')
-            .update({ coins: user.coins + coinsToAdd })
+            .update({ coins: (freshUser?.coins || 0) + coinsToAdd })
             .eq('telegram_id', telegram_id)
           await processReferralBonus(supabase, telegram_id, coinsToAdd)
         }
@@ -162,7 +180,6 @@ Deno.serve(async (req) => {
         result = {
           success: true,
           coins_earned: coinsToAdd,
-          total_coins: isLastAd ? (user.coins + coinsToAdd) : user.coins,
           ads_today: newAdsCount,
           completed: isLastAd,
         }
@@ -174,7 +191,6 @@ Deno.serve(async (req) => {
         const DAILY_REWARD = 400
         const dayStart = getTashkentDayStart()
 
-        // Count today's referrals
         const { count: todayRefs } = await supabase
           .from('referrals')
           .select('*', { count: 'exact', head: true })
@@ -186,7 +202,6 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Check if already claimed today
         const { data: alreadyClaimed } = await supabase
           .from('promo_history')
           .select('id')
@@ -200,12 +215,10 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Award coins
         await supabase.from('users')
           .update({ coins: (user.coins || 0) + DAILY_REWARD })
           .eq('telegram_id', telegram_id)
 
-        // Record in promo_history
         await supabase.from('promo_history').insert({
           user_telegram_id: telegram_id,
           code: 'DAILY_REFERRAL',
@@ -296,8 +309,8 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Calculate required bonus coins: 3000 per 10000 coins
-        const requiredBonusCoins = Math.ceil((amount_coins / 10000) * 3000)
+        // Calculate required bonus coins: 1300 per 10000 coins (13%)
+        const requiredBonusCoins = Math.ceil((amount_coins / 10000) * 1300)
         const userBonusCoins = user.bonus_coins || 0
 
         if (userBonusCoins < requiredBonusCoins) {
@@ -414,28 +427,15 @@ Deno.serve(async (req) => {
       }
 
       case 'get_bonus_window_status': {
-        // Count ads in current 10-min window
-        const now = new Date()
-        const minutes = now.getMinutes()
-        const windowStartMin = Math.floor(minutes / 10) * 10
-        const windowStartTime = new Date(now)
-        windowStartTime.setMinutes(windowStartMin, 0, 0)
+        // Use epoch-based 10-minute window (timezone-independent)
+        const windowStart = getTenMinuteWindowStart()
 
-        const { count: windowAds } = await supabase
-          .from('ad_views')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_telegram_id', telegram_id)
-          .gte('viewed_at', windowStartTime.toISOString())
-          .is('coins_earned', null) // bonus ads have null coins_earned, we use a marker
-
-        // Actually let's use a simpler approach - count bonus ad views
-        // We'll track bonus ads separately using a tag
         const { data: bonusViews } = await supabase
           .from('ad_views')
           .select('id')
           .eq('user_telegram_id', telegram_id)
-          .eq('coins_earned', -1) // marker for bonus ads
-          .gte('viewed_at', windowStartTime.toISOString())
+          .eq('coins_earned', -1)
+          .gte('viewed_at', windowStart)
 
         result = { success: true, window_ads_count: bonusViews?.length || 0 }
         break
@@ -454,19 +454,15 @@ Deno.serve(async (req) => {
           break
         }
 
-        // Check 10-min window limit
-        const nowB = new Date()
-        const minutesB = nowB.getMinutes()
-        const windowStartMinB = Math.floor(minutesB / 10) * 10
-        const windowStartTimeB = new Date(nowB)
-        windowStartTimeB.setMinutes(windowStartMinB, 0, 0)
+        // Use epoch-based 10-minute window
+        const windowStart = getTenMinuteWindowStart()
 
         const { data: bonusWindowViews } = await supabase
           .from('ad_views')
           .select('id')
           .eq('user_telegram_id', telegram_id)
           .eq('coins_earned', -1)
-          .gte('viewed_at', windowStartTimeB.toISOString())
+          .gte('viewed_at', windowStart)
 
         const windowCount = bonusWindowViews?.length || 0
         if (windowCount >= 5) {
@@ -475,7 +471,15 @@ Deno.serve(async (req) => {
         }
 
         const bonusReward = 2
-        const newBonusCoins = (user.bonus_coins || 0) + bonusReward
+        // Re-read fresh user data
+        const { data: freshBonusUser } = await supabase
+          .from('users')
+          .select('bonus_coins')
+          .eq('telegram_id', telegram_id)
+          .single()
+
+        const currentBonusCoins = freshBonusUser?.bonus_coins || 0
+        const newBonusCoins = currentBonusCoins + bonusReward
 
         // Record bonus ad view with coins_earned = -1 as marker
         await supabase.from('ad_views').insert({
